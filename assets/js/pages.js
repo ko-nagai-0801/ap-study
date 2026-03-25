@@ -479,7 +479,33 @@ const Pages = (() => {
       return;
     }
 
-    const questions = shuffle(pool).slice(0, Math.min(count, pool.length));
+    // スマートランダム：random/exam モードは未解答・低正答率を優先
+    let questions;
+    if (mode === 'random' || mode === 'exam') {
+      const weighted = pool.map(q => {
+        const p = Store.getProgress(q.id);
+        if (p.attempts === 0) return { q, w: 3 };          // 未解答：高優先
+        if (p.correct / p.attempts < 0.5) return { q, w: 2 }; // 低正答率：中優先
+        return { q, w: 1 };                                 // 習得済み：通常
+      });
+      const total = weighted.reduce((s, e) => s + e.w, 0);
+      const picked = [];
+      const available = [...weighted];
+      const need = Math.min(count, pool.length);
+      while (picked.length < need && available.length > 0) {
+        let r = Math.random() * available.reduce((s, e) => s + e.w, 0);
+        let idx = 0;
+        for (let i = 0; i < available.length; i++) {
+          r -= available[i].w;
+          if (r <= 0) { idx = i; break; }
+        }
+        picked.push(available[idx].q);
+        available.splice(idx, 1);
+      }
+      questions = picked;
+    } else {
+      questions = shuffle(pool).slice(0, Math.min(count, pool.length));
+    }
 
     // Store のクイズ状態を設定
     Store.quiz.questions     = questions;
@@ -1652,6 +1678,172 @@ const Pages = (() => {
     `);
   }
 
+  // ─── 試験直前まとめシート ──────────────────────────── //
+  function renderCheatsheet() {
+    const sheets = [
+      {
+        id: 'calc', title: '計算公式まとめ', icon: '🔢', color: '#7950F2',
+        items: [
+          { label: '稼働率（直列）', formula: 'A₁ × A₂ × … × Aₙ', note: '全て稼働が必要' },
+          { label: '稼働率（並列）', formula: '1 − (1−A₁)(1−A₂)…(1−Aₙ)', note: '1台でも稼働すればOK' },
+          { label: '稼働率（MTBF/MTTR）', formula: 'MTBF ÷ (MTBF + MTTR)', note: 'MTBF：平均故障間隔、MTTR：平均修復時間' },
+          { label: 'CPI（EVM）', formula: 'EV ÷ AC', note: '<1 コスト超過、>1 コスト節約' },
+          { label: 'SPI（EVM）', formula: 'EV ÷ PV', note: '<1 遅延、>1 前倒し' },
+          { label: 'EAC（完成時総コスト）', formula: 'BAC ÷ CPI', note: '現在のCPI継続を仮定' },
+          { label: 'NPV（正味現在価値）', formula: 'Σ(キャッシュフロー/(1+r)ⁿ) − 初期投資', note: '>0 なら投資効果あり' },
+          { label: 'ROI', formula: '(利益 ÷ 投資額) × 100 (%)', note: '投資対効果' },
+          { label: 'キャッシュヒット率', formula: 'キャッシュアクセス時間×h + 主記憶時間×(1−h)', note: 'h：ヒット率' },
+          { label: '通信チャネル数', formula: 'n(n−1) ÷ 2', note: 'n：メンバ数' },
+          { label: 'サブネットホスト数', formula: '2ʰ − 2', note: 'h：ホスト部ビット数（ネットワーク・BC除く）' },
+          { label: 'PERT期待値', formula: '(楽観値 + 4×最頻値 + 悲観値) ÷ 6', note: '三点見積もり' },
+        ],
+      },
+      {
+        id: 'security', title: '情報セキュリティ頻出', icon: '🔒', color: '#E03131',
+        items: [
+          { label: '対称鍵（共通鍵）暗号', formula: 'AES / DES / 3DES', note: '高速・鍵配送問題あり' },
+          { label: '公開鍵暗号', formula: 'RSA / 楕円曲線（ECDSA）', note: '低速・鍵配送問題なし' },
+          { label: 'ハイブリッド暗号', formula: 'データ→AES暗号化、AES鍵→RSA公開鍵で暗号化', note: 'TLS/HTTPSが採用' },
+          { label: 'デジタル署名', formula: '送信者の秘密鍵でハッシュを暗号化', note: '否認防止・改ざん検知（機密性なし）' },
+          { label: 'ハッシュ関数', formula: 'SHA-256 / SHA-3', note: '一方向性・衝突耐性（MD5/SHA-1は非推奨）' },
+          { label: 'PKI証明書チェーン', formula: 'サーバ証明書 → 中間CA → ルートCA', note: '公開鍵の正当性を保証' },
+          { label: 'CVSS スコア', formula: 'Base Score 0.0〜10.0（高い=深刻）', note: '7.0以上は重大' },
+          { label: '多要素認証', formula: '知識 × 所持 × 生体（異種2つ以上）', note: '同種の組合せはMFAでない' },
+          { label: 'XSS対策', formula: 'HTML エスケープ（出力時）', note: '&lt; &gt; &amp; &quot;' },
+          { label: 'SQLインジェクション対策', formula: 'プレースホルダ（バインド変数）使用', note: '入力値を SQL 文字列として扱わない' },
+          { label: 'CSRF対策', formula: 'CSRFトークン / SameSite Cookie', note: '正規フォームからの送信のみ受理' },
+        ],
+      },
+      {
+        id: 'network', title: 'ネットワーク頻出', icon: '🌐', color: '#1971C2',
+        items: [
+          { label: 'OSI 参照モデル', formula: '物→データリンク→ネットワーク→トランスポート→セッション→プレゼン→アプリ', note: '第1〜7層' },
+          { label: 'TCP/IP', formula: 'HTTP(80) / HTTPS(443) / SMTP(25) / DNS(53) / SSH(22)', note: 'ウェルノウンポート' },
+          { label: 'IPv4 プライベートアドレス', formula: '10.x / 172.16〜31.x / 192.168.x', note: 'インターネット不使用' },
+          { label: 'サブネットマスク /24', formula: '255.255.255.0 → ホスト254台', note: '/25→126台 /26→62台 /27→30台' },
+          { label: 'NAPT（IPマスカレード）', formula: 'プライベートIP＋ポート → グローバルIP共有', note: '家庭用ルータの標準動作' },
+          { label: 'DNS レコード', formula: 'A(IPv4) / AAAA(IPv6) / MX(メール) / CNAME(別名) / TXT(テキスト/SPF)', note: '' },
+          { label: 'TLS ハンドシェイク', formula: 'Client Hello → Server Hello → 証明書検証 → 鍵交換 → Finished', note: 'TLS1.3は1-RTT' },
+          { label: 'BGP', formula: 'AS間ルーティング（EGP）/ TCP 179番', note: 'パスベクタ型' },
+          { label: 'STP（スパニングツリー）', formula: 'ループ防止：冗長ポートをブロッキング状態に', note: 'ブロードキャストストーム防止' },
+          { label: 'VLAN', formula: 'L2スイッチで論理的にネットワーク分割', note: 'タグ VLAN: IEEE 802.1Q' },
+        ],
+      },
+      {
+        id: 'db', title: 'データベース頻出', icon: '🗃️', color: '#0CA678',
+        items: [
+          { label: 'ACID 特性', formula: '原子性(A)・一貫性(C)・独立性(I)・永続性(D)', note: 'トランザクションの基本要件' },
+          { label: '正規化の段階', formula: '1NF→2NF（部分従属除去）→3NF（推移従属除去）→BCNF', note: '通常は3NFで実用的' },
+          { label: 'SQL集計', formula: 'GROUP BY → HAVING（集計後条件）/ WHERE（集計前条件）', note: '順序: WHERE → GROUP BY → HAVING → SELECT' },
+          { label: 'JOIN種別', formula: 'INNER JOIN(共通) / LEFT JOIN(左全+右NULL) / CROSS JOIN(直積)', note: '' },
+          { label: 'インデックス', formula: 'SELECT高速化 / INSERT・UPDATE・DELETE低下', note: 'B+木：等値・範囲検索に有効' },
+          { label: '分離レベル', formula: 'READ UNCOMMITTED < READ COMMITTED < REPEATABLE READ < SERIALIZABLE', note: '高いほど整合性↑ 性能↓' },
+          { label: 'CAP定理', formula: 'C(整合性)・A(可用性)・P(分断耐性)は同時に3つ保証不可', note: 'NoSQL はAP系が多い' },
+          { label: 'デッドロック対策', formula: 'ロック順序統一 / タイムアウト / 待ちグラフ検出', note: '' },
+        ],
+      },
+      {
+        id: 'pm', title: 'プロジェクト管理頻出', icon: '📊', color: '#E67700',
+        items: [
+          { label: 'EVM 指標', formula: 'PV(予算コスト) / EV(出来高) / AC(実際コスト)', note: 'BAC：計画総コスト' },
+          { label: 'スケジュール差異', formula: 'SV = EV − PV（負→遅延）', note: '' },
+          { label: 'コスト差異', formula: 'CV = EV − AC（負→超過）', note: '' },
+          { label: 'クリティカルパス', formula: 'フロート=0 の経路。遅延するとプロジェクト全体が遅延', note: 'アローダイアグラムで算出' },
+          { label: 'PERT 3点見積もり', formula: '期待値=(O+4M+P)/6、分散=((P−O)/6)²', note: 'O:楽観、M:最頻、P:悲観' },
+          { label: 'リスク期待値（EMV）', formula: '発生確率 × 影響額', note: 'リスク予備費算出に使用' },
+          { label: 'PMBOK プロセス群', formula: '立上げ→計画→実行→監視コントロール→終結', note: '憲章は立上げで作成' },
+          { label: '通信チャネル', formula: 'n(n−1)/2', note: '人数増→チャネル急増' },
+        ],
+      },
+      {
+        id: 'os', title: 'OS・ハードウェア頻出', icon: '⚙️', color: '#E67700',
+        items: [
+          { label: 'LRU', formula: '最も長く未参照のページを置換', note: 'ページ置換アルゴリズム' },
+          { label: 'FIFO', formula: '最初に読み込まれたページを置換', note: 'ベラディの異常が発生しうる' },
+          { label: 'デッドロック条件', formula: '相互排除 / 占有と待機 / 非横取り / 循環待機（4条件同時成立）', note: '1つ除去で防止' },
+          { label: 'スレッショルディング', formula: 'ページフォルト多発 → スワップ頻発 → CPU利用率激減', note: 'メモリ増設で対処' },
+          { label: 'ハイパーバイザ', formula: 'タイプ1：ベアメタル（本番用）/ タイプ2：ホストOS型（開発用）', note: '' },
+          { label: 'コンテナ vs VM', formula: 'コンテナ：カーネル共有・高速起動 / VM：完全分離・高セキュリティ', note: 'Dockerはnamespace+cgroups' },
+          { label: 'RAID比較', formula: 'RAID0:速度 / RAID1:ミラー / RAID5:分散パリティ1台 / RAID6:2台故障耐', note: '' },
+          { label: 'キャッシュ実効アクセス時間', formula: 'h×Tc + (1−h)×Tm', note: 'h:ヒット率、Tc:キャッシュ、Tm:主記憶' },
+        ],
+      },
+    ];
+
+    const activeId = sheets[0].id;
+
+    mount(`
+      <div class="page fade-in">
+        <div class="container" id="cheatsheet-root">
+          <div class="page-header cs-header">
+            <div>
+              <h1 class="page-title">📋 試験直前まとめシート</h1>
+              <p class="page-subtitle">重要公式・頻出ポイントを分野別に整理</p>
+            </div>
+            <button class="btn btn-outline btn-sm no-print" onclick="window.print()" style="flex-shrink:0;">
+              🖨 印刷する
+            </button>
+          </div>
+
+          <!-- タブ -->
+          <div class="cs-tabs no-print" id="cs-tabs">
+            ${sheets.map(s => `
+              <button class="cs-tab${s.id === activeId ? ' active' : ''}" data-id="${s.id}">
+                ${s.icon} ${s.title}
+              </button>`).join('')}
+          </div>
+
+          <!-- シート本体（全シートを描画・タブで表示切替） -->
+          <div id="cs-content">
+            ${sheets.map(s => `
+              <div class="cs-sheet${s.id === activeId ? '' : ' cs-sheet--hidden'}" data-id="${s.id}">
+                <div class="cs-sheet-title" style="border-left:4px solid ${s.color};">
+                  ${s.icon} ${s.title}
+                </div>
+                <div class="cs-table-wrap">
+                  <table class="cs-table">
+                    <thead>
+                      <tr>
+                        <th>項目</th>
+                        <th>公式・定義</th>
+                        <th>補足</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${s.items.map(item => `
+                        <tr>
+                          <td class="cs-label">${item.label}</td>
+                          <td class="cs-formula"><code>${item.formula}</code></td>
+                          <td class="cs-note">${item.note}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+
+          <!-- 印刷時は全シート表示 -->
+          <p class="cs-print-note no-print" style="text-align:center;margin-top:24px;font-size:.8rem;color:var(--color-text-muted);">
+            印刷時は全分野が出力されます
+          </p>
+        </div>
+      </div>
+    `);
+
+    // タブ切り替え
+    document.querySelectorAll('.cs-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.id;
+        document.querySelectorAll('.cs-tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.querySelectorAll('.cs-sheet').forEach(el => {
+          el.classList.toggle('cs-sheet--hidden', el.dataset.id !== id);
+        });
+      });
+    });
+  }
+
   // ─── 404 ─────────────────────────────────────────── //
   function render404() {
     mount(`
@@ -1673,7 +1865,7 @@ const Pages = (() => {
     renderHome, renderSubjects, renderSubjectDetail,
     renderQuizSetup, renderQuestion, renderResult,
     renderDashboard, renderExamInfo,
-    renderGlossary, renderPlan, renderPmExam,
+    renderGlossary, renderPlan, renderPmExam, renderCheatsheet,
     render404,
   };
 })();
