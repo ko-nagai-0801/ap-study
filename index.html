@@ -9,6 +9,13 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#4361EE">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="AP 攻略">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
 </head>
 <body>
 
@@ -128,5 +135,13 @@
   <script src="assets/js/router.js"></script>
   <script src="assets/js/pages.js"></script>
   <script src="assets/js/main.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/ap-study/service-worker.js')
+          .catch(() => {}); // ローカル環境では無視
+      });
+    }
+  </script>
 </body>
 </html>

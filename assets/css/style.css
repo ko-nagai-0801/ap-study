@@ -500,6 +500,19 @@ select.form-control { appearance: none; padding-right: 36px;
 }
 .explanation__text { font-size: .9rem; line-height: 1.8; color: var(--color-text); white-space: pre-wrap; }
 
+.explanation__related {
+  margin-top: 16px; padding-top: 14px;
+  border-top: 1px solid var(--color-border-light);
+}
+.related-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 10px; border-radius: var(--radius);
+  margin-bottom: 6px; background: var(--color-surface-2);
+  transition: background .15s;
+}
+.related-item:hover { background: var(--color-primary-light, #e8edff); }
+.related-item__text { font-size: .8rem; color: var(--color-text); flex: 1; min-width: 0; }
+
 .quiz-actions {
   display: flex; gap: 12px; justify-content: space-between; flex-wrap: wrap;
   padding-top: 4px;

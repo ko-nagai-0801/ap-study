@@ -1,0 +1,28 @@
+{
+  "name": "応用情報技術者試験 攻略サイト",
+  "short_name": "AP 攻略",
+  "description": "応用情報技術者試験の合格を目指すための学習サイト。分野別解説・過去問演習・学習ダッシュボードを無料で利用できます。",
+  "start_url": "/ap-study/",
+  "scope": "/ap-study/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#4361EE",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["education"],
+  "screenshots": []
+}

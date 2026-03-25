@@ -804,15 +804,52 @@ const Pages = (() => {
     // 解説表示
     const expArea = document.getElementById('explanation-area');
     if (expArea) {
+      // 同カテゴリの関連問題（まだ未解答または低正答率）
+      const related = QUESTIONS_DATA
+        .filter(q => q.category === question.category && q.id !== question.id)
+        .map(q => {
+          const p = Store.getProgress(q.id);
+          const rate = p.attempts > 0 ? p.correct / p.attempts : -1;
+          return { q, rate };
+        })
+        .sort((a, b) => a.rate - b.rate) // 低正答率・未解答を優先
+        .slice(0, 3);
+
+      const tagsHtml = (question.tags || []).map(t =>
+        `<span class="badge badge-neutral" style="font-size:.7rem;">${t}</span>`
+      ).join(' ');
+
+      const relatedHtml = related.length > 0 ? `
+        <div class="explanation__related">
+          <div style="font-size:.8rem;font-weight:700;color:var(--color-text-muted);margin-bottom:8px;">📎 同分野の関連問題</div>
+          ${related.map(({ q, rate }) => {
+            const rateStr = rate < 0 ? '未解答' : Math.round(rate * 100) + '%';
+            return `
+              <div class="related-item" data-qid="${q.id}" style="cursor:pointer;">
+                <span class="related-item__text">${q.question.slice(0, 45)}…</span>
+                <span class="badge ${rate < 0 ? 'badge-neutral' : rate < 0.5 ? 'badge-error' : 'badge-success'}" style="font-size:.65rem;white-space:nowrap;">${rateStr}</span>
+              </div>`;
+          }).join('')}
+        </div>` : '';
+
       expArea.innerHTML = `
         <div class="explanation explanation--${isCorrect ? 'correct' : 'wrong'}">
           <div class="explanation__result">
             <span>${isCorrect ? '✅ 正解！' : '❌ 不正解'}</span>
             ${!isCorrect ? `<span style="font-size:.875rem;font-weight:400;color:var(--color-text);">正解：<strong>${['ア','イ','ウ','エ'][question.answer]}</strong></span>` : ''}
           </div>
+          <div style="margin-bottom:8px;">${tagsHtml}</div>
           <p class="explanation__text">${question.explanation}</p>
+          ${relatedHtml}
         </div>
       `;
+
+      // 関連問題クリックでクイズセットアップへ（カテゴリ絞り込み）
+      expArea.querySelectorAll('.related-item').forEach(el => {
+        el.addEventListener('click', () => {
+          Router.navigate('/quiz', { category: question.category });
+        });
+      });
     }
 
     // ボタン切替
