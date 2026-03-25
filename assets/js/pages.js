@@ -413,6 +413,32 @@ const Pages = (() => {
             <select class="form-control" id="category-select">${categoryOptions}</select>
           </div>
 
+          <!-- 難易度フィルター -->
+          <div style="margin-bottom:20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <label class="form-label" style="margin:0;">難易度フィルター</label>
+              <span id="diff-display" style="font-weight:700;color:var(--color-primary);font-size:.9rem;">すべて</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <select class="form-control" id="diff-min" style="flex:1;">
+                <option value="1">1 基本</option>
+                <option value="2">2 標準</option>
+                <option value="3">3 応用</option>
+                <option value="4">4 難</option>
+                <option value="5">5 超難</option>
+              </select>
+              <span style="color:var(--color-text-muted);">〜</span>
+              <select class="form-control" id="diff-max" style="flex:1;">
+                <option value="1">1 基本</option>
+                <option value="2">2 標準</option>
+                <option value="3">3 応用</option>
+                <option value="4">4 難</option>
+                <option value="5" selected>5 超難</option>
+              </select>
+            </div>
+            <p style="font-size:.75rem;color:var(--color-text-muted);margin-top:6px;">難易度 1（基本）〜 5（超難）の範囲を指定できます</p>
+          </div>
+
           <!-- 問題数 -->
           <div id="count-wrap" style="margin-bottom:28px; ${presetMode === 'exam' ? 'display:none;' : ''}">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
@@ -454,22 +480,44 @@ const Pages = (() => {
       document.getElementById('count-display').textContent = this.value + ' 問';
     });
 
+    function updateDiffDisplay() {
+      const mn = parseInt(document.getElementById('diff-min').value);
+      const mx = parseInt(document.getElementById('diff-max').value);
+      if (mn === 1 && mx === 5) {
+        document.getElementById('diff-display').textContent = 'すべて';
+      } else if (mn === mx) {
+        const labels = ['', '基本', '標準', '応用', '難', '超難'];
+        document.getElementById('diff-display').textContent = `${mn} ${labels[mn]}のみ`;
+      } else {
+        document.getElementById('diff-display').textContent = `難易度 ${mn} 〜 ${mx}`;
+      }
+    }
+    document.getElementById('diff-min').addEventListener('change', updateDiffDisplay);
+    document.getElementById('diff-max').addEventListener('change', updateDiffDisplay);
+
     document.getElementById('start-quiz-btn').addEventListener('click', () => {
       const category = document.getElementById('category-select').value;
       const count = currentMode === 'exam' ? 25 : parseInt(document.getElementById('count-range').value);
-      startQuiz(currentMode, category, count);
+      const diffMin = parseInt(document.getElementById('diff-min').value);
+      const diffMax = parseInt(document.getElementById('diff-max').value);
+      startQuiz(currentMode, category, count, diffMin, diffMax);
     });
   }
 
   // ─── クイズ開始ロジック ────────────────────────────── //
-  function startQuiz(mode, category, count) {
+  function startQuiz(mode, category, count, diffMin = 1, diffMax = 5) {
     let pool = [...QUESTIONS_DATA];
+
+    // 難易度フィルター
+    if (diffMin > 1 || diffMax < 5) {
+      pool = pool.filter(q => q.difficulty >= diffMin && q.difficulty <= diffMax);
+    }
 
     if (mode === 'category' && category) {
       pool = pool.filter(q => q.category === category);
     } else if (mode === 'weak') {
       const weak = Store.getWeakQuestions(20);
-      if (weak.length > 0) pool = weak;
+      if (weak.length > 0) pool = pool.filter(q => weak.some(w => w.id === q.id));
     } else if (mode === 'bookmark') {
       pool = pool.filter(q => Store.getProgress(q.id).bookmarked);
     }
@@ -727,6 +775,12 @@ const Pages = (() => {
       questionIds: q.questions.map(qst => qst.id),
     });
 
+    // バッジチェック
+    const newBadges = Store.checkBadges();
+    newBadges.forEach(b => {
+      setTimeout(() => showToast(`🏆 実績解除：${b.icon} ${b.name}`, 'success'), 500);
+    });
+
     Router.navigate('/result');
   }
 
@@ -908,6 +962,7 @@ const Pages = (() => {
   function renderDashboard() {
     const stats    = Store.getOverallStats();
     const catStats = Store.getCategoryStats();
+    const badges   = Store.getEarnedBadges();
     const recent   = Store.getRecentSessions(7);
 
     const statCards = [
@@ -1036,6 +1091,23 @@ const Pages = (() => {
           <div class="chart-wrap heatmap-section" style="margin-top:24px;">
             <h2 class="chart-title" style="margin-bottom:12px;">📆 学習カレンダー（直近 3 ヶ月）</h2>
             ${buildHeatmap(Store.getRecentSessions(500))}
+          </div>
+
+          <!-- 実績バッジ -->
+          <div class="chart-wrap" style="margin-top:24px;">
+            <h2 class="chart-title" style="margin-bottom:16px;">🏆 実績バッジ</h2>
+            <div class="badge-grid">
+              ${badges.map(b => `
+                <div class="badge-item ${b.earned ? 'badge-item--earned' : 'badge-item--locked'}">
+                  <div class="badge-item__icon">${b.earned ? b.icon : '🔒'}</div>
+                  <div class="badge-item__name">${b.name}</div>
+                  <div class="badge-item__desc">${b.desc}</div>
+                </div>
+              `).join('')}
+            </div>
+            <p style="font-size:.75rem;color:var(--color-text-muted);margin-top:12px;text-align:center;">
+              ${badges.filter(b => b.earned).length} / ${badges.length} 個獲得
+            </p>
           </div>
 
           <!-- リセットボタン -->

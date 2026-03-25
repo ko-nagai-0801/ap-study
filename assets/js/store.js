@@ -161,11 +161,49 @@ const Store = (() => {
     lsSet('settings', _settings);
   }
 
+  // ─── 実績バッジ ───────────────────────────────────────
+  const BADGE_DEFS = [
+    { id: 'first_answer',   icon: '🎉', name: '初回解答',       desc: 'はじめて問題に回答した',           check: (s) => s.totalAttempts >= 1 },
+    { id: 'ten_answers',    icon: '🔟', name: '10問突破',        desc: '累計10問以上回答した',             check: (s) => s.totalAttempts >= 10 },
+    { id: 'fifty_answers',  icon: '🏅', name: '50問突破',        desc: '累計50問以上回答した',             check: (s) => s.totalAttempts >= 50 },
+    { id: 'hundred_answers',icon: '💯', name: '100問突破',       desc: '累計100問以上回答した',            check: (s) => s.totalAttempts >= 100 },
+    { id: 'two_hundred',    icon: '🚀', name: '200問突破',       desc: '累計200問以上回答した',            check: (s) => s.totalAttempts >= 200 },
+    { id: 'accuracy_70',    icon: '⭐', name: '正答率70%',       desc: '全体正答率が70%以上',              check: (s) => s.totalAttempts >= 20 && s.accuracy >= 70 },
+    { id: 'accuracy_80',    icon: '🌟', name: '正答率80%',       desc: '全体正答率が80%以上',              check: (s) => s.totalAttempts >= 20 && s.accuracy >= 80 },
+    { id: 'streak_3',       icon: '🔥', name: '3日連続',         desc: '3日連続で学習した',                check: (s) => s.streak >= 3 },
+    { id: 'streak_7',       icon: '🔥🔥', name: '7日連続',      desc: '7日連続で学習した',                check: (s) => s.streak >= 7 },
+    { id: 'five_sessions',  icon: '📚', name: '5回演習',         desc: '演習セッションを5回以上完了した',  check: (s) => s.sessionsCount >= 5 },
+    { id: 'perfect_session',icon: '✨', name: '満点セッション',  desc: '1回のセッションで全問正解した',    check: (s, sessions) => sessions.some(ss => ss.total >= 5 && ss.correct === ss.total) },
+    { id: 'all_categories', icon: '🌈', name: '全分野制覇',      desc: 'すべての分野で1問以上解答した',    check: (s, sessions, catStats) => catStats.every(c => c.attempts > 0) },
+  ];
+
+  let _badges = lsGet('badges', []);
+
+  function checkBadges() {
+    const stats = getOverallStats();
+    const catStats = getCategoryStats();
+    const sessions = _sessions;
+    const newlyEarned = [];
+    BADGE_DEFS.forEach(def => {
+      if (!_badges.includes(def.id) && def.check(stats, sessions, catStats)) {
+        _badges.push(def.id);
+        newlyEarned.push(def);
+      }
+    });
+    if (newlyEarned.length > 0) lsSet('badges', _badges);
+    return newlyEarned;
+  }
+
+  function getEarnedBadges() {
+    return BADGE_DEFS.map(def => ({ ...def, earned: _badges.includes(def.id) }));
+  }
+
   // ─── データリセット ───────────────────────────────────
   function resetAll() {
-    _progress = {}; _sessions = [];
+    _progress = {}; _sessions = []; _badges = [];
     lsSet('progress', _progress);
     lsSet('sessions', _sessions);
+    lsSet('badges', _badges);
   }
 
   // ─── 公開 API ─────────────────────────────────────────
@@ -174,6 +212,7 @@ const Store = (() => {
     recordAnswer, toggleBookmark, getProgress,
     saveSession, getOverallStats, getCategoryStats,
     getWeakQuestions, getRecentSessions,
+    checkBadges, getEarnedBadges,
     getSetting, setSetting, resetAll,
   };
 })();

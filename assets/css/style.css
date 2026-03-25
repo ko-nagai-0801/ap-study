@@ -1205,6 +1205,32 @@ select.form-control { appearance: none; padding-right: 36px;
 }
 .cs-note { font-size: .8rem; color: var(--color-text-muted); }
 
+/* ─── 実績バッジ ─────────────────────────────────────── */
+.badge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+.badge-item {
+  border-radius: var(--radius-lg);
+  padding: 16px 12px;
+  text-align: center;
+  border: 1px solid var(--color-border);
+  transition: transform .15s;
+}
+.badge-item--earned {
+  background: linear-gradient(135deg, #e8edff 0%, var(--color-surface) 100%);
+  border-color: var(--color-primary);
+}
+.badge-item--locked {
+  opacity: .45;
+  background: var(--color-surface-2);
+}
+.badge-item--earned:hover { transform: translateY(-2px); }
+.badge-item__icon { font-size: 2rem; margin-bottom: 6px; }
+.badge-item__name { font-size: .8rem; font-weight: 700; margin-bottom: 4px; }
+.badge-item__desc { font-size: .7rem; color: var(--color-text-muted); line-height: 1.4; }
+
 /* 印刷スタイル */
 @media print {
   .header, .footer, .no-print, #search-overlay, .toast-container { display: none !important; }
