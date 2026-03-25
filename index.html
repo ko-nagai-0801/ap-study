@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>応用情報技術者試験 攻略サイト</title>
+  <meta name="description" content="応用情報技術者試験の合格を目指すための学習サイト。分野別解説・過去問演習・学習ダッシュボードを無料で利用できます。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+  <!-- ========== ヘッダー ========== -->
+  <header class="header" id="header">
+    <nav class="nav container">
+      <a href="#/" class="nav__logo" aria-label="トップページへ">
+        <span class="logo-badge">AP</span>
+        <span class="logo-text">応用情報<span class="logo-text--sub">攻略サイト</span></span>
+      </a>
+
+      <ul class="nav__links" id="nav-links" role="menubar">
+        <li role="none"><a href="#/subjects" class="nav__link" role="menuitem">分野別学習</a></li>
+        <li role="none"><a href="#/quiz" class="nav__link nav__link--cta" role="menuitem">過去問演習</a></li>
+        <li role="none"><a href="#/dashboard" class="nav__link" role="menuitem">ダッシュボード</a></li>
+        <li role="none"><a href="#/glossary" class="nav__link" role="menuitem">用語集</a></li>
+        <li role="none"><a href="#/plan" class="nav__link" role="menuitem">学習計画</a></li>
+        <li role="none"><a href="#/pm-exam" class="nav__link" role="menuitem">午後対策</a></li>
+        <li role="none"><a href="#/exam-info" class="nav__link" role="menuitem">試験情報</a></li>
+      </ul>
+
+      <div class="nav__actions">
+        <button id="search-icon-btn" aria-label="検索" title="検索（/キー）">🔍</button>
+        <button class="btn-icon theme-toggle" id="theme-toggle" aria-label="ダークモード切替" title="ダークモード切替">
+          <span class="theme-icon" id="theme-icon">🌙</span>
+        </button>
+        <button class="btn-icon nav__hamburger" id="nav-hamburger" aria-label="メニューを開く" aria-expanded="false">
+          <span class="hamburger-bar"></span>
+          <span class="hamburger-bar"></span>
+          <span class="hamburger-bar"></span>
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- ========== モバイルドロワー ========== -->
+  <div class="drawer" id="mobile-drawer" role="dialog" aria-label="ナビゲーション" aria-hidden="true">
+    <div class="drawer__header">
+      <span class="drawer__title">メニュー</span>
+      <button class="btn-icon drawer__close" id="drawer-close" aria-label="メニューを閉じる">✕</button>
+    </div>
+    <ul class="drawer__links">
+      <li><a href="#/subjects" class="drawer__link">📚 分野別学習</a></li>
+      <li><a href="#/quiz" class="drawer__link drawer__link--cta">✏️ 過去問演習</a></li>
+      <li><a href="#/dashboard" class="drawer__link">📊 ダッシュボード</a></li>
+      <li><a href="#/glossary" class="drawer__link">📖 用語集</a></li>
+      <li><a href="#/plan" class="drawer__link">📅 学習計画</a></li>
+      <li><a href="#/pm-exam" class="drawer__link">📝 午後試験対策</a></li>
+      <li><a href="#/exam-info" class="drawer__link">ℹ️ 試験情報</a></li>
+    </ul>
+  </div>
+  <div class="overlay" id="overlay" aria-hidden="true"></div>
+
+  <!-- ========== メインコンテンツ ========== -->
+  <main id="app" class="main-content" role="main">
+    <!-- SPA コンテンツ（JavaScript により動的に挿入） -->
+    <div class="loading-screen" id="loading-screen">
+      <div class="loading-spinner"></div>
+      <p class="loading-text">読み込み中...</p>
+    </div>
+  </main>
+
+  <!-- ========== フッター ========== -->
+  <footer class="footer">
+    <div class="container footer__inner">
+      <div class="footer__logo">
+        <span class="logo-badge logo-badge--sm">AP</span>
+        <span>応用情報攻略サイト</span>
+      </div>
+      <nav class="footer__nav" aria-label="フッターナビゲーション">
+        <a href="#/subjects">分野別学習</a>
+        <a href="#/quiz">過去問演習</a>
+        <a href="#/dashboard">ダッシュボード</a>
+        <a href="#/glossary">用語集</a>
+        <a href="#/plan">学習計画</a>
+        <a href="#/pm-exam">午後対策</a>
+        <a href="#/exam-info">試験情報</a>
+      </nav>
+      <p class="footer__disclaimer">
+        ※ 本サイトの問題は学習目的で作成したサンプル問題です。正確な過去問は
+        <a href="https://www.ipa.go.jp/shiken/" target="_blank" rel="noopener noreferrer">IPA 公式サイト</a>
+        でご確認ください。
+      </p>
+      <p class="footer__copy">© 2024 応用情報技術者試験 攻略サイト</p>
+    </div>
+  </footer>
+
+  <!-- ========== 全文検索オーバーレイ ========== -->
+  <div class="search-overlay" id="search-overlay" role="dialog" aria-label="検索" aria-modal="true">
+    <div class="search-box" id="search-box">
+      <div class="search-input-wrap">
+        <span class="search-input-icon">🔍</span>
+        <input type="search" id="search-input" class="search-input"
+          placeholder="問題・用語・分野を検索…" autocomplete="off" spellcheck="false">
+        <span class="search-shortcut">ESC で閉じる</span>
+      </div>
+      <div class="search-results" id="search-results">
+        <div class="search-empty">キーワードを入力してください</div>
+      </div>
+      <div class="search-footer">
+        <span class="search-kb"><kbd>↑</kbd><kbd>↓</kbd> 移動</span>
+        <span class="search-kb"><kbd>Enter</kbd> 決定</span>
+        <span class="search-kb"><kbd>Esc</kbd> 閉じる</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== Toast 通知 ========== -->
+  <div class="toast-container" id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- ========== スクリプト ========== -->
+  <script src="assets/js/data.js"></script>
+  <script src="assets/js/store.js"></script>
+  <script src="assets/js/router.js"></script>
+  <script src="assets/js/pages.js"></script>
+  <script src="assets/js/main.js"></script>
+</body>
+</html>
