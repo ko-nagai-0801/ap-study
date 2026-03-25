@@ -93,24 +93,32 @@ const Pages = (() => {
         <!-- ヒーロー -->
         <section class="hero">
           <div class="container">
-            <div class="hero__label">🎯 国家資格対策</div>
+            <div class="hero__label">🎯 国家資格対策 — 無料・登録不要</div>
             <h1 class="hero__title">応用情報技術者試験を<br>体系的に攻略する</h1>
             <p class="hero__subtitle">
-              分野別テキスト解説・過去問演習・弱点分析を一つのサイトで。
-              無料・登録不要で今すぐ学習を始めよう。
+              ${hasPrev
+                ? `${stats.streak > 0 ? `🔥 ${stats.streak}日連続学習中！` : '学習を再開しましょう'} 累計 <strong>${stats.totalAttempts}</strong> 問回答 · 正答率 <strong>${stats.accuracy}%</strong>`
+                : '分野別テキスト解説・過去問演習・弱点分析・用語集を一つのサイトで。今すぐ学習を始めよう。'}
             </p>
             <div class="hero__actions">
-              <a href="#/quiz" class="btn hero__cta-primary">✏️ 過去問演習を始める</a>
-              <a href="#/subjects" class="btn hero__cta-secondary">📚 分野別に学ぶ</a>
+              ${hasPrev
+                ? `<a href="#/quiz" class="btn hero__cta-primary">▶ 続きから演習する</a>
+                   <a href="#/dashboard" class="btn hero__cta-secondary">📊 ダッシュボード</a>`
+                : `<a href="#/quiz" class="btn hero__cta-primary">✏️ 演習を始める（無料）</a>
+                   <a href="#/subjects" class="btn hero__cta-secondary">📚 分野別に学ぶ</a>`}
             </div>
             <div class="hero__meta">
               <div class="hero__meta-item">
-                <div class="hero__meta-value">25+</div>
+                <div class="hero__meta-value">${QUESTIONS_DATA.length}</div>
                 <div class="hero__meta-label">収録問題数</div>
               </div>
               <div class="hero__meta-item">
-                <div class="hero__meta-value">5</div>
+                <div class="hero__meta-value">${SUBJECTS_DATA.length}</div>
                 <div class="hero__meta-label">対応分野</div>
+              </div>
+              <div class="hero__meta-item">
+                <div class="hero__meta-value">${GLOSSARY_DATA.length}</div>
+                <div class="hero__meta-label">用語集収録数</div>
               </div>
               <div class="hero__meta-item">
                 <div class="hero__meta-value">100%</div>
@@ -908,6 +916,45 @@ const Pages = (() => {
       ? `<svg class="chart-svg" viewBox="0 0 ${chartWidth} ${chartHeight}" style="max-height:300px;">${bars}</svg>`
       : `<p style="color:var(--color-text-muted);text-align:center;padding:20px 0;">まだ演習履歴がありません</p>`;
 
+    // 正答率推移折れ線グラフ（直近10セッション）
+    function buildTrendChart(sessions) {
+      const pts = sessions.slice(0, 10).reverse();
+      if (pts.length < 2) return '<p style="color:var(--color-text-muted);text-align:center;padding:20px 0;">2 回以上演習すると表示されます</p>';
+      const W = 400; const H = 120; const padL = 36; const padR = 16; const padT = 12; const padB = 28;
+      const plotW = W - padL - padR; const plotH = H - padT - padB;
+      const accs = pts.map(s => Math.round(s.correct / s.total * 100));
+      const xStep = plotW / (pts.length - 1);
+      const yScale = v => padT + plotH - (v / 100 * plotH);
+      // 60点ライン
+      const y60 = yScale(60);
+      // 折れ線
+      const polyline = pts.map((_, i) => `${padL + i * xStep},${yScale(accs[i])}`).join(' ');
+      // 点
+      const dots = pts.map((s, i) => {
+        const x = padL + i * xStep; const y = yScale(accs[i]);
+        const color = accs[i] >= 60 ? '#2F9E44' : '#E03131';
+        return `<circle cx="${x}" cy="${y}" r="4" fill="${color}" stroke="var(--color-surface)" stroke-width="2"/>`;
+      }).join('');
+      // X軸ラベル
+      const xLabels = pts.map((s, i) => {
+        const d = new Date(s.date);
+        return `<text x="${padL + i * xStep}" y="${H - 6}" text-anchor="middle" class="bar-chart-label" font-size="9">${d.getMonth()+1}/${d.getDate()}</text>`;
+      }).join('');
+      // Y軸目盛り
+      const yLabels = [0,20,40,60,80,100].map(v => `
+        <line x1="${padL}" y1="${yScale(v)}" x2="${padL + plotW}" y2="${yScale(v)}" stroke="var(--color-border-light)" stroke-width="1"/>
+        <text x="${padL - 4}" y="${yScale(v) + 4}" text-anchor="end" class="bar-chart-label" font-size="9">${v}</text>
+      `).join('');
+      return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:140px;">
+        ${yLabels}
+        <line x1="${padL}" y1="${y60}" x2="${padL+plotW}" y2="${y60}" stroke="#E03131" stroke-width="1" stroke-dasharray="4,3" opacity=".5"/>
+        <text x="${padL+plotW+2}" y="${y60+3}" font-size="9" fill="#E03131" opacity=".7">60%</text>
+        <polyline points="${polyline}" fill="none" stroke="var(--color-primary)" stroke-width="2.5" stroke-linejoin="round"/>
+        ${dots}${xLabels}
+      </svg>`;
+    }
+    const trendChart = buildTrendChart(recent);
+
     // 最近のセッション
     const recentHtml = recent.length > 0
       ? recent.map(s => {
@@ -943,12 +990,14 @@ const Pages = (() => {
               ${svgChart}
             </div>
 
-            <!-- 最近の履歴 -->
+            <!-- 正答率推移 -->
             <div class="chart-wrap">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0;">
-                <h2 class="chart-title" style="margin-bottom:0;">🕐 最近の演習</h2>
+              <h2 class="chart-title" style="margin-bottom:12px;">📈 正答率の推移（直近 10 回）</h2>
+              ${trendChart}
+              <div style="margin-top:12px;">
+                <h3 style="font-size:.875rem;font-weight:700;margin-bottom:8px;">🕐 最近の演習</h3>
+                ${recentHtml}
               </div>
-              ${recentHtml}
               ${recent.length > 0 ? `<a href="#/quiz" class="btn btn-primary btn-full" style="margin-top:16px;">今日も演習する</a>` : `
                 <a href="#/quiz" class="btn btn-primary btn-full" style="margin-top:16px;">演習を始める →</a>`}
             </div>
