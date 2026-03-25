@@ -14,7 +14,8 @@ const Router = (() => {
     '/glossary':   () => Pages.renderGlossary(),
     '/plan':       () => Pages.renderPlan(),
     '/pm-exam':    () => Pages.renderPmExam(),
-    '/cheatsheet': () => Pages.renderCheatsheet(),
+    '/cheatsheet':  () => Pages.renderCheatsheet(),
+    '/questions':   () => Pages.renderQuestions(),
   };
 
   // 動的ルート: /subjects/:id

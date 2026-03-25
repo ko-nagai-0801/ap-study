@@ -1218,6 +1218,33 @@ select.form-control { appearance: none; padding-right: 36px;
 }
 .cs-note { font-size: .8rem; color: var(--color-text-muted); }
 
+/* ─── 問題ブラウザ ───────────────────────────────────── */
+.q-filter-bar {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;
+}
+.q-row {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 14px; border-radius: var(--radius);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  margin-bottom: 8px; cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.q-row:hover { background: var(--color-surface-2); border-color: var(--color-primary); }
+.q-row__main { flex: 1; min-width: 0; }
+.q-row__meta { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; flex-wrap: wrap; }
+.q-row__text { font-size: .875rem; color: var(--color-text); line-height: 1.5; margin-bottom: 4px; }
+.q-row__tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.q-row__stats {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+  min-width: 80px; flex-shrink: 0;
+}
+.q-bm-btn {
+  font-size: 1.1rem; cursor: pointer; padding: 2px;
+  color: var(--color-text-muted); transition: color .15s;
+}
+.q-bm-btn.active, .q-bm-btn:hover { color: var(--color-warning); }
+
 /* ─── 実績バッジ ─────────────────────────────────────── */
 .badge-grid {
   display: grid;

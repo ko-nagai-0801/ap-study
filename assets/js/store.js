@@ -253,6 +253,47 @@ const Store = (() => {
     lsSet('sr_data', _srData);
   }
 
+  // ─── エクスポート / インポート ────────────────────────
+  function exportData() {
+    const payload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      progress: _progress,
+      sessions: _sessions,
+      badges: _badges,
+      sr_data: _srData,
+      settings: lsGet('settings', {}),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `ap-study-backup-${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importData(jsonText) {
+    try {
+      const data = JSON.parse(jsonText);
+      if (!data.version || !data.progress) throw new Error('不正なフォーマット');
+      _progress = data.progress || {};
+      _sessions = data.sessions || [];
+      _badges   = data.badges   || [];
+      _srData   = data.sr_data  || {};
+      lsSet('progress', _progress);
+      lsSet('sessions', _sessions);
+      lsSet('badges',   _badges);
+      lsSet('sr_data',  _srData);
+      if (data.settings) {
+        Object.entries(data.settings).forEach(([k, v]) => setSetting(k, v));
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   // ─── 公開 API ─────────────────────────────────────────
   return {
     quiz: _quiz,
@@ -261,6 +302,7 @@ const Store = (() => {
     getWeakQuestions, getRecentSessions,
     checkBadges, getEarnedBadges,
     updateSR, getDueQuestions, getSRData,
+    exportData, importData,
     getSetting, setSetting, resetAll,
   };
 })();

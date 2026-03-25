@@ -1223,8 +1223,15 @@ const Pages = (() => {
             </p>
           </div>
 
-          <!-- リセットボタン -->
+          <!-- エクスポート / インポート / リセット -->
           <div style="text-align:center;margin-top:40px;padding-top:24px;border-top:1px solid var(--color-border);">
+            <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:12px;">
+              <button class="btn btn-secondary btn-sm" id="export-btn">⬇️ データをエクスポート</button>
+              <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
+                ⬆️ データをインポート
+                <input type="file" id="import-file" accept=".json" style="display:none;">
+              </label>
+            </div>
             <button class="btn btn-secondary btn-sm" id="reset-btn" style="color:var(--color-error);">
               🗑 学習データをリセット
             </button>
@@ -1232,6 +1239,28 @@ const Pages = (() => {
         </div>
       </div>
     `);
+
+    document.getElementById('export-btn').addEventListener('click', () => {
+      Store.exportData();
+      showToast('データをエクスポートしました', 'success');
+    });
+
+    document.getElementById('import-file').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const ok = Store.importData(ev.target.result);
+        if (ok) {
+          showToast('データをインポートしました', 'success');
+          renderDashboard();
+        } else {
+          showToast('インポートに失敗しました（ファイル形式が無効）', 'error');
+        }
+        e.target.value = '';
+      };
+      reader.readAsText(file);
+    });
 
     document.getElementById('reset-btn').addEventListener('click', () => {
       if (confirm('学習データをすべてリセットしますか？この操作は取り消せません。')) {
@@ -2045,12 +2074,148 @@ const Pages = (() => {
     `);
   }
 
+  // ─── 全問題ブラウザ ───────────────────────────────── //
+  function renderQuestions() {
+    const categories = [{ id: '', name: 'すべて' }, ...SUBJECTS_DATA.map(s => ({ id: s.id, name: s.name }))];
+    const years = ['', ...[...new Set(QUESTIONS_DATA.map(q => q.year).filter(Boolean))].sort((a,b) => b-a)];
+    const diffs = [0,1,2,3,4,5];
+
+    let filterCat  = '';
+    let filterYear = '';
+    let filterDiff = 0;
+    let filterStatus = ''; // '', 'unanswered', 'correct', 'incorrect', 'bookmarked'
+    let searchText = '';
+
+    function getFiltered() {
+      return QUESTIONS_DATA.filter(q => {
+        if (filterCat  && q.category !== filterCat) return false;
+        if (filterYear && String(q.year) !== String(filterYear)) return false;
+        if (filterDiff && q.difficulty !== filterDiff) return false;
+        if (searchText) {
+          const t = searchText.toLowerCase();
+          if (!q.question.toLowerCase().includes(t) && !(q.tags||[]).join(' ').toLowerCase().includes(t)) return false;
+        }
+        if (filterStatus) {
+          const p = Store.getProgress(q.id);
+          if (filterStatus === 'unanswered' && p.attempts > 0) return false;
+          if (filterStatus === 'correct'    && (p.attempts === 0 || p.correct/p.attempts < 1)) return false;
+          if (filterStatus === 'incorrect'  && (p.attempts === 0 || p.correct/p.attempts >= 0.5)) return false;
+          if (filterStatus === 'bookmarked' && !p.bookmarked) return false;
+        }
+        return true;
+      });
+    }
+
+    function renderList() {
+      const filtered = getFiltered();
+      const listEl = document.getElementById('q-list');
+      if (!listEl) return;
+      if (filtered.length === 0) {
+        listEl.innerHTML = '<div class="search-empty" style="padding:48px 0;text-align:center;">条件に一致する問題が見つかりません</div>';
+        return;
+      }
+      document.getElementById('q-count').textContent = `${filtered.length} 問`;
+      listEl.innerHTML = filtered.map(q => {
+        const p  = Store.getProgress(q.id);
+        const sr = Store.getSRData(q.id);
+        const acc = p.attempts > 0 ? Math.round(p.correct / p.attempts * 100) : null;
+        const accBadge = acc === null
+          ? '<span class="badge badge-neutral">未解答</span>'
+          : `<span class="badge ${acc >= 70 ? 'badge-success' : 'badge-error'}">${acc}%</span>`;
+        const bm = p.bookmarked ? '★' : '☆';
+        const diffStars = '★'.repeat(q.difficulty) + '☆'.repeat(5 - q.difficulty);
+        const nextRev = sr ? new Date(sr.nextReview).toLocaleDateString('ja-JP', {month:'numeric',day:'numeric'}) : '—';
+        return `
+          <div class="q-row" data-id="${q.id}">
+            <div class="q-row__main">
+              <div class="q-row__meta">
+                <span class="badge badge-neutral" style="font-size:.7rem;">${q.categoryName}</span>
+                <span style="font-size:.75rem;color:var(--color-warning);">${diffStars}</span>
+                ${q.year ? `<span style="font-size:.75rem;color:var(--color-text-muted);">${q.year}年</span>` : ''}
+              </div>
+              <div class="q-row__text">${q.question.slice(0,80)}${q.question.length>80?'…':''}</div>
+              <div class="q-row__tags">${(q.tags||[]).map(t=>`<span class="badge badge-neutral" style="font-size:.65rem;">${t}</span>`).join(' ')}</div>
+            </div>
+            <div class="q-row__stats">
+              ${accBadge}
+              <span style="font-size:.7rem;color:var(--color-text-muted);" title="次回復習日">🔄 ${nextRev}</span>
+              <span class="q-bm-btn ${p.bookmarked ? 'active' : ''}" data-id="${q.id}" title="ブックマーク">${bm}</span>
+            </div>
+          </div>`;
+      }).join('');
+
+      listEl.querySelectorAll('.q-bm-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          Store.toggleBookmark(btn.dataset.id);
+          renderList();
+        });
+      });
+      listEl.querySelectorAll('.q-row').forEach(row => {
+        row.addEventListener('click', e => {
+          if (e.target.classList.contains('q-bm-btn')) return;
+          const q = QUESTIONS_DATA.find(q => q.id === row.dataset.id);
+          if (!q) return;
+          Router.navigate('/quiz', { category: q.category });
+        });
+      });
+    }
+
+    document.getElementById('app').innerHTML = `
+      <section class="container" style="padding-top:80px;padding-bottom:64px;max-width:900px;">
+        <h1 class="page-title">📝 問題一覧</h1>
+        <p style="color:var(--color-text-muted);margin-bottom:24px;">全 ${QUESTIONS_DATA.length} 問。フィルターで絞り込んでから演習に進めます。</p>
+
+        <!-- フィルターバー -->
+        <div class="q-filter-bar">
+          <input type="search" id="q-search" class="form-control" placeholder="🔍 問題文・タグを検索…" style="flex:1;min-width:180px;">
+
+          <select id="q-cat" class="form-control" style="min-width:130px;">
+            ${categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')}
+          </select>
+
+          <select id="q-year" class="form-control" style="min-width:100px;">
+            ${years.map(y=>`<option value="${y}">${y ? y+'年' : '年度'}</option>`).join('')}
+          </select>
+
+          <select id="q-diff" class="form-control" style="min-width:100px;">
+            <option value="0">難易度</option>
+            ${[1,2,3,4,5].map(d=>`<option value="${d}">${'★'.repeat(d)} (${d})</option>`).join('')}
+          </select>
+
+          <select id="q-status" class="form-control" style="min-width:110px;">
+            <option value="">進捗</option>
+            <option value="unanswered">未解答</option>
+            <option value="incorrect">苦手（&lt;50%）</option>
+            <option value="correct">得意（100%）</option>
+            <option value="bookmarked">★ブックマーク</option>
+          </select>
+        </div>
+        <div style="font-size:.85rem;color:var(--color-text-muted);margin-bottom:16px;">
+          <span id="q-count">${QUESTIONS_DATA.length} 問</span> 表示中
+          <a href="#/quiz" class="btn btn-primary btn-sm no-print" style="float:right;margin-top:-4px;">演習を開始 →</a>
+        </div>
+
+        <!-- 問題リスト -->
+        <div id="q-list"></div>
+      </section>`;
+
+    renderList();
+
+    // フィルターイベント
+    document.getElementById('q-search').addEventListener('input', e => { searchText = e.target.value; renderList(); });
+    document.getElementById('q-cat').addEventListener('change',   e => { filterCat  = e.target.value; renderList(); });
+    document.getElementById('q-year').addEventListener('change',  e => { filterYear = e.target.value; renderList(); });
+    document.getElementById('q-diff').addEventListener('change',  e => { filterDiff = parseInt(e.target.value)||0; renderList(); });
+    document.getElementById('q-status').addEventListener('change',e => { filterStatus = e.target.value; renderList(); });
+  }
+
   // ─── 公開 API ─────────────────────────────────────────
   return {
     renderHome, renderSubjects, renderSubjectDetail,
     renderQuizSetup, renderQuestion, renderResult,
     renderDashboard, renderExamInfo,
     renderGlossary, renderPlan, renderPmExam, renderCheatsheet,
-    render404,
+    renderQuestions, render404,
   };
 })();
