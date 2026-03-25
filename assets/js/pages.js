@@ -362,6 +362,13 @@ const Pages = (() => {
   function renderQuizSetup() {
     const query = Router.getQuery();
     const presetMode = query.mode || 'random';
+
+    // 年度一覧（データから動的生成）
+    const availableYears = [...new Set(QUESTIONS_DATA.map(q => q.year).filter(Boolean))].sort((a,b) => b-a);
+    // タグ人気順（上位18個）
+    const tagCounts = {};
+    QUESTIONS_DATA.forEach(q => (q.tags||[]).forEach(t => { tagCounts[t] = (tagCounts[t]||0)+1; }));
+    const popularTags = Object.entries(tagCounts).sort((a,b)=>b[1]-a[1]).slice(0,18).map(([t])=>t);
     const presetCategory = query.category || '';
 
     const categoryOptions = [
@@ -405,6 +412,11 @@ const Pages = (() => {
               <div class="mode-card__title">ブックマーク復習</div>
               <div class="mode-card__desc">★マークした問題だけを集中演習する。</div>
             </div>
+            <div class="mode-card ${presetMode === 'review' ? 'selected' : ''}" data-mode="review">
+              <div class="mode-card__icon">🔄</div>
+              <div class="mode-card__title">間隔反復復習</div>
+              <div class="mode-card__desc">今日の復習期限が来た問題を優先出題。記憶定着を最大化。</div>
+            </div>
           </div>
 
           <!-- 分野選択（分野別モード時のみ） -->
@@ -437,6 +449,30 @@ const Pages = (() => {
               </select>
             </div>
             <p style="font-size:.75rem;color:var(--color-text-muted);margin-top:6px;">難易度 1（基本）〜 5（超難）の範囲を指定できます</p>
+          </div>
+
+          <!-- 年度フィルター -->
+          <div style="margin-bottom:20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <label class="form-label" style="margin:0;">出題年度</label>
+              <span id="year-display" style="font-weight:700;color:var(--color-primary);font-size:.9rem;">すべて</span>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="filter-btn active" data-year="">すべて</button>
+              ${availableYears.map(y => `<button class="filter-btn" data-year="${y}">${y}年</button>`).join('')}
+            </div>
+          </div>
+
+          <!-- タグフィルター -->
+          <div style="margin-bottom:20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <label class="form-label" style="margin:0;">タグ絞り込み</label>
+              <span id="tag-display" style="font-weight:700;color:var(--color-primary);font-size:.85rem;">指定なし</span>
+            </div>
+            <div id="tag-chip-wrap" style="display:flex;gap:6px;flex-wrap:wrap;">
+              ${popularTags.map(t => `<button class="filter-btn tag-chip" data-tag="${t}" style="font-size:.75rem;">${t}</button>`).join('')}
+            </div>
+            <p style="font-size:.75rem;color:var(--color-text-muted);margin-top:6px;">複数選択可。選択なしはすべてのタグが対象です。</p>
           </div>
 
           <!-- 問題数 -->
@@ -495,22 +531,55 @@ const Pages = (() => {
     document.getElementById('diff-min').addEventListener('change', updateDiffDisplay);
     document.getElementById('diff-max').addEventListener('change', updateDiffDisplay);
 
+    // ─── 年度フィルター ──────────────────────────────
+    let selectedYear = '';
+    document.querySelectorAll('.filter-btn[data-year]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn[data-year]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedYear = btn.dataset.year;
+        document.getElementById('year-display').textContent = selectedYear ? selectedYear + '年' : 'すべて';
+      });
+    });
+
+    // ─── タグフィルター ──────────────────────────────
+    const selectedTags = new Set();
+    document.querySelectorAll('.tag-chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tag = btn.dataset.tag;
+        if (selectedTags.has(tag)) { selectedTags.delete(tag); btn.classList.remove('active'); }
+        else { selectedTags.add(tag); btn.classList.add('active'); }
+        const arr = [...selectedTags];
+        document.getElementById('tag-display').textContent = arr.length ? arr.join('・') : '指定なし';
+      });
+    });
+
     document.getElementById('start-quiz-btn').addEventListener('click', () => {
       const category = document.getElementById('category-select').value;
       const count = currentMode === 'exam' ? 25 : parseInt(document.getElementById('count-range').value);
       const diffMin = parseInt(document.getElementById('diff-min').value);
       const diffMax = parseInt(document.getElementById('diff-max').value);
-      startQuiz(currentMode, category, count, diffMin, diffMax);
+      startQuiz(currentMode, category, count, diffMin, diffMax, selectedYear, [...selectedTags]);
     });
   }
 
   // ─── クイズ開始ロジック ────────────────────────────── //
-  function startQuiz(mode, category, count, diffMin = 1, diffMax = 5) {
+  function startQuiz(mode, category, count, diffMin = 1, diffMax = 5, year = '', tags = []) {
     let pool = [...QUESTIONS_DATA];
 
     // 難易度フィルター
     if (diffMin > 1 || diffMax < 5) {
       pool = pool.filter(q => q.difficulty >= diffMin && q.difficulty <= diffMax);
+    }
+
+    // 年度フィルター
+    if (year) {
+      pool = pool.filter(q => String(q.year) === String(year));
+    }
+
+    // タグフィルター（選択タグをひとつでも含む問題）
+    if (tags.length > 0) {
+      pool = pool.filter(q => (q.tags || []).some(t => tags.includes(t)));
     }
 
     if (mode === 'category' && category) {
@@ -520,6 +589,9 @@ const Pages = (() => {
       if (weak.length > 0) pool = pool.filter(q => weak.some(w => w.id === q.id));
     } else if (mode === 'bookmark') {
       pool = pool.filter(q => Store.getProgress(q.id).bookmarked);
+    } else if (mode === 'review') {
+      const due = Store.getDueQuestions(count);
+      if (due.length > 0) pool = due;
     }
 
     if (pool.length === 0) {
@@ -717,6 +789,9 @@ const Pages = (() => {
     Store.quiz.isAnswered = true;
     Store.recordAnswer(question.id, selected, isCorrect);
     Store.quiz.answers.push({ questionId: question.id, selected, correct: isCorrect });
+
+    // 間隔反復データを更新（正解=5、不正解=1）
+    Store.updateSR(question.id, isCorrect ? 5 : 1);
 
     // 選択肢の色付け
     document.querySelectorAll('.choice').forEach(btn => {
@@ -970,6 +1045,7 @@ const Pages = (() => {
       { icon: '✅', value: stats.accuracy + '%', label: '全体正答率' },
       { icon: '🔥', value: stats.streak + '日', label: '連続学習' },
       { icon: '📅', value: stats.todayTotal, label: '今日の回答数' },
+      { icon: '🔄', value: Store.getDueQuestions(999).length, label: '今日の復習数' },
     ].map(s => `
       <div class="stat-card">
         <div class="stat-card__icon">${s.icon}</div>

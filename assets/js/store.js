@@ -198,12 +198,59 @@ const Store = (() => {
     return BADGE_DEFS.map(def => ({ ...def, earned: _badges.includes(def.id) }));
   }
 
+  // ─── 間隔反復（SM-2 簡易版） ─────────────────────────
+  // sr_data: { questionId: { interval, easeFactor, nextReview } }
+  let _srData = lsGet('sr_data', {});
+
+  function _initSR(questionId) {
+    if (!_srData[questionId]) {
+      _srData[questionId] = { interval: 0, easeFactor: 2.5, nextReview: new Date().toISOString() };
+    }
+    return _srData[questionId];
+  }
+
+  /**
+   * SM-2 アルゴリズムで次回復習日を更新
+   * quality: 0-5（3以上で正解扱い）
+   *   5=完璧 4=少し考えた 3=辛うじて正解 2=誤答後正解 1=誤答 0=完全不正解
+   */
+  function updateSR(questionId, quality) {
+    const sr = _initSR(questionId);
+    if (quality >= 3) {
+      if (sr.interval === 0)      sr.interval = 1;
+      else if (sr.interval === 1) sr.interval = 6;
+      else sr.interval = Math.round(sr.interval * sr.easeFactor);
+    } else {
+      sr.interval = 1; // 不正解は翌日に再出題
+    }
+    sr.easeFactor = Math.max(1.3, sr.easeFactor + 0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+    const next = new Date();
+    next.setDate(next.getDate() + sr.interval);
+    sr.nextReview = next.toISOString();
+    lsSet('sr_data', _srData);
+  }
+
+  /** 今日以前に復習期限が来ている問題を返す */
+  function getDueQuestions(limit = 20) {
+    const now = new Date();
+    return QUESTIONS_DATA.filter(q => {
+      const sr = _srData[q.id];
+      if (!sr) return true; // 未学習 → 今日が対象
+      return new Date(sr.nextReview) <= now;
+    }).slice(0, limit);
+  }
+
+  function getSRData(questionId) {
+    return _srData[questionId] || null;
+  }
+
   // ─── データリセット ───────────────────────────────────
   function resetAll() {
-    _progress = {}; _sessions = []; _badges = [];
+    _progress = {}; _sessions = []; _badges = []; _srData = {};
     lsSet('progress', _progress);
     lsSet('sessions', _sessions);
     lsSet('badges', _badges);
+    lsSet('sr_data', _srData);
   }
 
   // ─── 公開 API ─────────────────────────────────────────
@@ -213,6 +260,7 @@ const Store = (() => {
     saveSession, getOverallStats, getCategoryStats,
     getWeakQuestions, getRecentSessions,
     checkBadges, getEarnedBadges,
+    updateSR, getDueQuestions, getSRData,
     getSetting, setSetting, resetAll,
   };
 })();
