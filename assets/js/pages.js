@@ -637,7 +637,8 @@ const Pages = (() => {
     Store.quiz.isAnswered    = false;
     Store.quiz.selectedChoice = null;
     Store.quiz.sessionId     = Date.now().toString();
-    Store.quiz.timeLeft      = mode === 'exam' ? 25 * 3 * 60 : null; // 25問 × 3分
+    Store.quiz.timeLimit     = mode === 'exam' ? 80 * 60 : questions.length * 90; // exam=80分、通常=1.5分/問
+    Store.quiz.timeLeft      = Store.quiz.timeLimit;
 
     renderQuestion();
   }
@@ -672,7 +673,7 @@ const Pages = (() => {
                 <div class="quiz-counter">${current} / ${total} 問</div>
                 <div class="progress"><div class="progress-bar" style="width:${pct}%"></div></div>
               </div>
-              ${isExam ? `<div class="quiz-timer" id="quiz-timer">${fmtTime(q.timeLeft)}</div>` : ''}
+              <div class="quiz-timer${isExam ? ' quiz-timer--exam' : ''}" id="quiz-timer">${fmtTime(q.timeLeft)}</div>
               <button class="btn btn-secondary btn-sm" id="quit-btn">中断</button>
             </div>
 
@@ -701,15 +702,17 @@ const Pages = (() => {
       </div>
     `);
 
-    // タイマー
-    if (isExam && Store.quiz.timeLeft !== null) {
+    // タイマー（全モード共通）
+    if (Store.quiz.timeLeft !== null) {
       clearInterval(Store.quiz.timerInterval);
       const timerEl = document.getElementById('quiz-timer');
       Store.quiz.timerInterval = setInterval(() => {
         Store.quiz.timeLeft--;
         if (timerEl) {
           timerEl.textContent = fmtTime(Store.quiz.timeLeft);
-          if (Store.quiz.timeLeft <= 60) timerEl.classList.add('warning');
+          const warn = isExam ? 300 : Math.min(120, Store.quiz.timeLimit * 0.1);
+          if (Store.quiz.timeLeft <= warn) timerEl.classList.add('warning');
+          if (Store.quiz.timeLeft <= 60)  timerEl.classList.add('danger');
         }
         if (Store.quiz.timeLeft <= 0) { clearInterval(Store.quiz.timerInterval); endQuiz(); }
       }, 1000);
@@ -832,6 +835,7 @@ const Pages = (() => {
           }).join('')}
         </div>` : '';
 
+      const existingMemo = Store.getMemo(question.id);
       expArea.innerHTML = `
         <div class="explanation explanation--${isCorrect ? 'correct' : 'wrong'}">
           <div class="explanation__result">
@@ -841,6 +845,14 @@ const Pages = (() => {
           <div style="margin-bottom:8px;">${tagsHtml}</div>
           <p class="explanation__text">${question.explanation}</p>
           ${relatedHtml}
+          <div class="memo-area">
+            <div class="memo-area__label">📝 メモ</div>
+            <textarea class="memo-textarea" id="memo-textarea" placeholder="この問題についてのメモを入力…" rows="3">${existingMemo}</textarea>
+            <div class="memo-actions">
+              <button class="btn btn-secondary btn-sm" id="memo-save-btn">保存</button>
+              ${existingMemo ? `<button class="btn btn-outline btn-sm" id="memo-clear-btn">削除</button>` : ''}
+            </div>
+          </div>
         </div>
       `;
 
@@ -850,6 +862,24 @@ const Pages = (() => {
           Router.navigate('/quiz', { category: question.category });
         });
       });
+
+      // メモ保存
+      const memoSave = document.getElementById('memo-save-btn');
+      if (memoSave) {
+        memoSave.addEventListener('click', () => {
+          const text = document.getElementById('memo-textarea').value;
+          Store.setMemo(question.id, text);
+          showToast(text.trim() ? '📝 メモを保存しました' : 'メモを削除しました', 'success');
+        });
+      }
+      const memoClear = document.getElementById('memo-clear-btn');
+      if (memoClear) {
+        memoClear.addEventListener('click', () => {
+          document.getElementById('memo-textarea').value = '';
+          Store.setMemo(question.id, '');
+          showToast('メモを削除しました');
+        });
+      }
     }
 
     // ボタン切替
@@ -919,6 +949,10 @@ const Pages = (() => {
     const total   = q.answers.length;
     const pct     = Math.round(correct / total * 100);
     const duration = Math.round((Date.now() - q.startTime) / 1000);
+    const timeLimit = q.timeLimit || 0;
+    const avgSec  = total > 0 ? Math.round(duration / total) : 0;
+    const timeUsedPct = timeLimit > 0 ? Math.min(100, Math.round(duration / timeLimit * 100)) : 0;
+    const timeRemain = timeLimit > 0 ? Math.max(0, timeLimit - duration) : 0;
 
     let grade = '', gradeStyle = '';
     if (pct >= 80)      { grade = 'S'; gradeStyle = 'background:var(--color-success);color:#fff;'; }
@@ -950,6 +984,63 @@ const Pages = (() => {
           </div>
         </div>`;
     }).join('');
+
+    // 難易度別集計
+    const diffMap = { 1:{name:'基本',correct:0,total:0}, 2:{name:'標準',correct:0,total:0},
+                      3:{name:'応用',correct:0,total:0}, 4:{name:'難',correct:0,total:0}, 5:{name:'超難',correct:0,total:0} };
+    const diffColors = { 1:'#51cf66', 2:'#339af0', 3:'#f59f00', 4:'#f76707', 5:'#e03131' };
+    q.answers.forEach(a => {
+      const question = QUESTIONS_DATA.find(qst => qst.id === a.questionId);
+      if (!question) return;
+      const d = question.difficulty;
+      diffMap[d].total++;
+      if (a.correct) diffMap[d].correct++;
+    });
+    const diffBreakdown = Object.entries(diffMap)
+      .filter(([, v]) => v.total > 0)
+      .map(([d, v]) => {
+        const acc = Math.round(v.correct / v.total * 100);
+        return `
+          <div class="result-diff-row">
+            <span class="result-diff-label" style="color:${diffColors[d]};">${v.name}</span>
+            <div class="result-diff-bar-wrap">
+              <div class="result-diff-bar" style="width:${acc}%;background:${diffColors[d]};"></div>
+            </div>
+            <span class="result-diff-pct">${acc}%<span style="font-weight:400;color:var(--color-text-muted);font-size:.75rem;"> (${v.correct}/${v.total})</span></span>
+          </div>`;
+      }).join('');
+
+    // 時間分析
+    const timeAnalysisHtml = timeLimit > 0 ? `
+      <div class="card" style="margin-bottom:24px;">
+        <h2 class="card-title" style="margin-bottom:20px;">⏱ 時間分析</h2>
+        <div class="result-time-grid">
+          <div class="result-time-item">
+            <div class="result-time-value">${fmtTime(duration)}</div>
+            <div class="result-time-label">消費時間</div>
+          </div>
+          <div class="result-time-item">
+            <div class="result-time-value">${fmtTime(timeLimit)}</div>
+            <div class="result-time-label">制限時間</div>
+          </div>
+          <div class="result-time-item">
+            <div class="result-time-value" style="color:${timeRemain > 0 ? 'var(--color-success)' : 'var(--color-error)'};">${fmtTime(timeRemain)}</div>
+            <div class="result-time-label">残り時間</div>
+          </div>
+          <div class="result-time-item">
+            <div class="result-time-value">${avgSec}秒</div>
+            <div class="result-time-label">平均/問</div>
+          </div>
+        </div>
+        <div style="margin-top:16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:.8rem;margin-bottom:6px;color:var(--color-text-muted);">
+            <span>時間消費率</span><span>${timeUsedPct}%</span>
+          </div>
+          <div class="progress" style="height:10px;">
+            <div class="progress-bar" style="width:${timeUsedPct}%;background:${timeUsedPct >= 90 ? 'var(--color-error)' : timeUsedPct >= 70 ? 'var(--color-warning)' : 'var(--color-success)'};transition:width .6s ease;"></div>
+          </div>
+        </div>
+      </div>` : '';
 
     // 間違えた問題一覧
     const wrongAnswers = q.answers
@@ -1002,6 +1093,16 @@ const Pages = (() => {
               <h2 class="card-title" style="margin-bottom:20px;">📊 分野別正答率</h2>
               ${catBreakdown}
             </div>` : ''}
+
+          <!-- 難易度別 -->
+          ${diffBreakdown ? `
+            <div class="card" style="margin-bottom:24px;">
+              <h2 class="card-title" style="margin-bottom:20px;">🎯 難易度別正答率</h2>
+              ${diffBreakdown}
+            </div>` : ''}
+
+          <!-- 時間分析 -->
+          ${timeAnalysisHtml}
 
           <!-- 間違えた問題 -->
           ${wrongAnswers ? `
@@ -2083,7 +2184,7 @@ const Pages = (() => {
     let filterCat  = '';
     let filterYear = '';
     let filterDiff = 0;
-    let filterStatus = ''; // '', 'unanswered', 'correct', 'incorrect', 'bookmarked'
+    let filterStatus = ''; // '', 'unanswered', 'correct', 'incorrect', 'bookmarked', 'memo'
     let searchText = '';
 
     function getFiltered() {
@@ -2101,6 +2202,7 @@ const Pages = (() => {
           if (filterStatus === 'correct'    && (p.attempts === 0 || p.correct/p.attempts < 1)) return false;
           if (filterStatus === 'incorrect'  && (p.attempts === 0 || p.correct/p.attempts >= 0.5)) return false;
           if (filterStatus === 'bookmarked' && !p.bookmarked) return false;
+          if (filterStatus === 'memo'       && !Store.hasMemo(q.id)) return false;
         }
         return true;
       });
@@ -2123,6 +2225,7 @@ const Pages = (() => {
           ? '<span class="badge badge-neutral">未解答</span>'
           : `<span class="badge ${acc >= 70 ? 'badge-success' : 'badge-error'}">${acc}%</span>`;
         const bm = p.bookmarked ? '★' : '☆';
+        const hasMemo = Store.hasMemo(q.id);
         const diffStars = '★'.repeat(q.difficulty) + '☆'.repeat(5 - q.difficulty);
         const nextRev = sr ? new Date(sr.nextReview).toLocaleDateString('ja-JP', {month:'numeric',day:'numeric'}) : '—';
         return `
@@ -2132,6 +2235,7 @@ const Pages = (() => {
                 <span class="badge badge-neutral" style="font-size:.7rem;">${q.categoryName}</span>
                 <span style="font-size:.75rem;color:var(--color-warning);">${diffStars}</span>
                 ${q.year ? `<span style="font-size:.75rem;color:var(--color-text-muted);">${q.year}年</span>` : ''}
+                ${hasMemo ? `<span class="q-memo-icon" title="メモあり">📝</span>` : ''}
               </div>
               <div class="q-row__text">${q.question.slice(0,80)}${q.question.length>80?'…':''}</div>
               <div class="q-row__tags">${(q.tags||[]).map(t=>`<span class="badge badge-neutral" style="font-size:.65rem;">${t}</span>`).join(' ')}</div>
@@ -2189,6 +2293,7 @@ const Pages = (() => {
             <option value="incorrect">苦手（&lt;50%）</option>
             <option value="correct">得意（100%）</option>
             <option value="bookmarked">★ブックマーク</option>
+            <option value="memo">📝メモあり</option>
           </select>
         </div>
         <div style="font-size:.85rem;color:var(--color-text-muted);margin-bottom:16px;">

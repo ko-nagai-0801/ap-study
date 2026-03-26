@@ -415,10 +415,14 @@ select.form-control { appearance: none; padding-right: 36px;
 .quiz-progress-wrap { flex: 1; min-width: 200px; }
 .quiz-counter { font-size: .875rem; color: var(--color-text-sub); margin-bottom: 6px; }
 .quiz-timer {
-  font-family: var(--font-en); font-size: 1.5rem; font-weight: 700;
-  color: var(--color-text); min-width: 80px; text-align: right;
+  font-family: var(--font-en); font-size: 1.25rem; font-weight: 700;
+  color: var(--color-text-sub); min-width: 72px; text-align: right;
+  padding: 4px 10px; border-radius: var(--radius-sm);
+  background: var(--color-surface-2); transition: background .3s, color .3s;
 }
-.quiz-timer.warning { color: var(--color-error); animation: pulse 1s ease infinite; }
+.quiz-timer--exam { font-size: 1.5rem; }
+.quiz-timer.warning { color: var(--color-warning); background: var(--color-warning-bg); }
+.quiz-timer.danger  { color: var(--color-error);   background: var(--color-error-bg); animation: pulse 1s ease infinite; }
 
 .question-card {
   background: var(--color-surface);
@@ -558,6 +562,36 @@ select.form-control { appearance: none; padding-right: 36px;
 .review-item--wrong   { border-left-color: var(--color-error); }
 .review-item__icon { font-size: 1.1rem; flex-shrink: 0; }
 .review-item__text { flex: 1; font-size: .875rem; color: var(--color-text); line-height: 1.5; }
+
+/* 難易度別正答率バー */
+.result-diff-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+}
+.result-diff-label {
+  font-size: .8rem; font-weight: 700; min-width: 36px; text-align: right; flex-shrink: 0;
+}
+.result-diff-bar-wrap {
+  flex: 1; height: 10px; background: var(--color-surface-2); border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.result-diff-bar {
+  height: 100%; border-radius: var(--radius-full); transition: width .6s ease;
+}
+.result-diff-pct {
+  font-size: .85rem; font-weight: 700; min-width: 80px; font-family: var(--font-en);
+}
+
+/* 時間分析 */
+.result-time-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; text-align: center;
+}
+.result-time-item { padding: 12px; background: var(--color-surface-2); border-radius: var(--radius-md); }
+.result-time-value { font-size: 1.2rem; font-weight: 700; font-family: var(--font-en); }
+.result-time-label { font-size: .75rem; color: var(--color-text-muted); margin-top: 4px; }
+
+@media (max-width: 480px) {
+  .result-time-grid { grid-template-columns: repeat(2, 1fr); }
+}
 
 /* ─── 12. ダッシュボード ──────────────────────────────── */
 .stats-grid {
@@ -1244,6 +1278,28 @@ select.form-control { appearance: none; padding-right: 36px;
   color: var(--color-text-muted); transition: color .15s;
 }
 .q-bm-btn.active, .q-bm-btn:hover { color: var(--color-warning); }
+.q-memo-icon { font-size: .75rem; }
+
+/* メモエリア */
+.memo-area {
+  margin-top: 16px; padding-top: 14px;
+  border-top: 1px solid var(--color-border-light);
+}
+.memo-area__label {
+  font-size: .8rem; font-weight: 700; color: var(--color-text-sub);
+  margin-bottom: 8px;
+}
+.memo-textarea {
+  width: 100%; box-sizing: border-box;
+  padding: 10px 12px; font-size: .875rem; font-family: var(--font-sans);
+  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  background: var(--color-bg); color: var(--color-text);
+  resize: vertical; line-height: 1.6; transition: border-color .15s;
+}
+.memo-textarea:focus { outline: none; border-color: var(--color-primary); }
+.memo-actions {
+  display: flex; gap: 8px; margin-top: 8px;
+}
 
 /* ─── 実績バッジ ─────────────────────────────────────── */
 .badge-grid {

@@ -49,6 +49,7 @@ const Store = (() => {
     selectedChoice: null,
     timerInterval: null,
     timeLeft:      null,
+    timeLimit:     null,
     sessionId:     null,
   };
 
@@ -244,13 +245,29 @@ const Store = (() => {
     return _srData[questionId] || null;
   }
 
+  // ─── メモ（ノート） ───────────────────────────────────
+  let _memos = lsGet('memos', {}); // { questionId: string }
+
+  function getMemo(questionId) { return _memos[questionId] || ''; }
+  function setMemo(questionId, text) {
+    if (text.trim() === '') {
+      delete _memos[questionId];
+    } else {
+      _memos[questionId] = text;
+    }
+    lsSet('memos', _memos);
+  }
+  function hasMemo(questionId) { return !!_memos[questionId]; }
+  function getMemoCount() { return Object.keys(_memos).length; }
+
   // ─── データリセット ───────────────────────────────────
   function resetAll() {
-    _progress = {}; _sessions = []; _badges = []; _srData = {};
+    _progress = {}; _sessions = []; _badges = []; _srData = {}; _memos = {};
     lsSet('progress', _progress);
     lsSet('sessions', _sessions);
     lsSet('badges', _badges);
     lsSet('sr_data', _srData);
+    lsSet('memos', _memos);
   }
 
   // ─── エクスポート / インポート ────────────────────────
@@ -262,6 +279,7 @@ const Store = (() => {
       sessions: _sessions,
       badges: _badges,
       sr_data: _srData,
+      memos: _memos,
       settings: lsGet('settings', {}),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -281,10 +299,12 @@ const Store = (() => {
       _sessions = data.sessions || [];
       _badges   = data.badges   || [];
       _srData   = data.sr_data  || {};
+      _memos    = data.memos    || {};
       lsSet('progress', _progress);
       lsSet('sessions', _sessions);
       lsSet('badges',   _badges);
       lsSet('sr_data',  _srData);
+      lsSet('memos',    _memos);
       if (data.settings) {
         Object.entries(data.settings).forEach(([k, v]) => setSetting(k, v));
       }
@@ -303,6 +323,7 @@ const Store = (() => {
     checkBadges, getEarnedBadges,
     updateSR, getDueQuestions, getSRData,
     exportData, importData,
+    getMemo, setMemo, hasMemo, getMemoCount,
     getSetting, setSetting, resetAll,
   };
 })();
