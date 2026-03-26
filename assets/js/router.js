@@ -16,6 +16,7 @@ const Router = (() => {
     '/pm-exam':    () => Pages.renderPmExam(),
     '/cheatsheet':  () => Pages.renderCheatsheet(),
     '/questions':   () => Pages.renderQuestions(),
+    '/flashcard':   () => Pages.renderFlashcard(),
   };
 
   // 動的ルート: /subjects/:id

@@ -404,8 +404,13 @@ const Pages = (() => {
             </div>
             <div class="mode-card ${presetMode === 'exam' ? 'selected' : ''}" data-mode="exam">
               <div class="mode-card__icon">⏱️</div>
-              <div class="mode-card__title">模擬試験</div>
-              <div class="mode-card__desc">25 問 × タイマー付き。本番形式で実力を測る。</div>
+              <div class="mode-card__title">模擬試験（25問）</div>
+              <div class="mode-card__desc">25 問 × 80分タイマー付き。本番形式で実力を測る。</div>
+            </div>
+            <div class="mode-card mode-card--featured ${presetMode === 'mock_exam' ? 'selected' : ''}" data-mode="mock_exam">
+              <div class="mode-card__icon">🏆</div>
+              <div class="mode-card__title">本番模擬試験（AP午前）</div>
+              <div class="mode-card__desc">80 問 × 150分。実際の試験と同じ形式。合否判定付き。</div>
             </div>
             <div class="mode-card ${presetMode === 'bookmark' ? 'selected' : ''}" data-mode="bookmark">
               <div class="mode-card__icon">★</div>
@@ -476,7 +481,7 @@ const Pages = (() => {
           </div>
 
           <!-- 問題数 -->
-          <div id="count-wrap" style="margin-bottom:28px; ${presetMode === 'exam' ? 'display:none;' : ''}">
+          <div id="count-wrap" style="margin-bottom:28px; ${(presetMode === 'exam' || presetMode === 'mock_exam') ? 'display:none;' : ''}">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
               <label class="form-label" style="margin:0;">問題数</label>
               <span id="count-display" style="font-weight:700;color:var(--color-primary);font-family:var(--font-en);">10 問</span>
@@ -508,7 +513,9 @@ const Pages = (() => {
         card.classList.add('selected');
         currentMode = card.dataset.mode;
         document.getElementById('category-select-wrap').style.display = currentMode === 'category' ? '' : 'none';
-        document.getElementById('count-wrap').style.display = currentMode === 'exam' ? 'none' : '';
+        document.getElementById('count-wrap').style.display = (currentMode === 'exam' || currentMode === 'mock_exam') ? 'none' : '';
+        document.getElementById('start-quiz-btn').textContent =
+          currentMode === 'mock_exam' ? '🏆 本番模擬試験を開始 →' : '演習を開始する →';
       });
     });
 
@@ -556,7 +563,7 @@ const Pages = (() => {
 
     document.getElementById('start-quiz-btn').addEventListener('click', () => {
       const category = document.getElementById('category-select').value;
-      const count = currentMode === 'exam' ? 25 : parseInt(document.getElementById('count-range').value);
+      const count = currentMode === 'mock_exam' ? 80 : currentMode === 'exam' ? 25 : parseInt(document.getElementById('count-range').value);
       const diffMin = parseInt(document.getElementById('diff-min').value);
       const diffMax = parseInt(document.getElementById('diff-max').value);
       startQuiz(currentMode, category, count, diffMin, diffMax, selectedYear, [...selectedTags]);
@@ -592,6 +599,17 @@ const Pages = (() => {
     } else if (mode === 'review') {
       const due = Store.getDueQuestions(count);
       if (due.length > 0) pool = due;
+    } else if (mode === 'mock_exam') {
+      // カテゴリごとに均等に選出（合計 count=80 問）
+      const catIds = [...new Set(pool.map(q => q.category))];
+      const perCat = Math.floor(count / catIds.length);
+      const remainder = count % catIds.length;
+      const picked = [];
+      catIds.forEach((cat, i) => {
+        const catPool = shuffle(pool.filter(q => q.category === cat));
+        picked.push(...catPool.slice(0, perCat + (i < remainder ? 1 : 0)));
+      });
+      pool = picked.length > 0 ? picked : pool;
     }
 
     if (pool.length === 0) {
@@ -637,7 +655,7 @@ const Pages = (() => {
     Store.quiz.isAnswered    = false;
     Store.quiz.selectedChoice = null;
     Store.quiz.sessionId     = Date.now().toString();
-    Store.quiz.timeLimit     = mode === 'exam' ? 80 * 60 : questions.length * 90; // exam=80分、通常=1.5分/問
+    Store.quiz.timeLimit     = mode === 'mock_exam' ? 150 * 60 : mode === 'exam' ? 80 * 60 : questions.length * 90; // mock_exam=150分、exam=80分、通常=1.5分/問
     Store.quiz.timeLeft      = Store.quiz.timeLimit;
 
     renderQuestion();
@@ -960,6 +978,22 @@ const Pages = (() => {
     else if (pct >= 40) { grade = 'B'; gradeStyle = 'background:var(--color-warning);color:#fff;'; }
     else                { grade = 'C'; gradeStyle = 'background:var(--color-error);color:#fff;'; }
 
+    // 本番模擬試験：合否判定（AP午前 60% = 48点以上で合格）
+    const isMockExam = q.mode === 'mock_exam';
+    const passThreshold = 60; // %
+    const passed = pct >= passThreshold;
+    const mockExamBanner = isMockExam ? `
+      <div class="mock-exam-verdict ${passed ? 'mock-exam-verdict--pass' : 'mock-exam-verdict--fail'}">
+        <div class="mock-exam-verdict__icon">${passed ? '🎉' : '📖'}</div>
+        <div class="mock-exam-verdict__text">
+          <div class="mock-exam-verdict__title">${passed ? '合格圏内！' : '不合格（要復習）'}</div>
+          <div class="mock-exam-verdict__sub">
+            AP午前試験基準：${total}問中${Math.ceil(total * 0.6)}問（60%）以上正解で合格。
+            あなたの結果：${correct}問正解（${pct}%）
+          </div>
+        </div>
+      </div>` : '';
+
     // 分野別集計
     const catMap = {};
     q.answers.forEach(a => {
@@ -1064,7 +1098,9 @@ const Pages = (() => {
     mount(`
       <div class="page fade-in">
         <div class="container" style="max-width:720px;">
-          <h1 class="page-title" style="text-align:center; margin-bottom:32px;">演習結果</h1>
+          <h1 class="page-title" style="text-align:center; margin-bottom:32px;">${isMockExam ? '🏆 本番模擬試験 結果' : '演習結果'}</h1>
+
+          ${mockExamBanner}
 
           <!-- スコア -->
           <div class="result-hero">
@@ -2315,12 +2351,180 @@ const Pages = (() => {
     document.getElementById('q-status').addEventListener('change',e => { filterStatus = e.target.value; renderList(); });
   }
 
+  // ─── フラッシュカード ──────────────────────────────── //
+  function renderFlashcard() {
+    const cats = [{ id: '', name: 'すべて' }, ...SUBJECTS_DATA.map(s => ({ id: s.id, name: s.name })),
+      { id: 'database', name: 'データベース' }, { id: 'software-dev', name: 'ソフトウェア開発' },
+      { id: 'business-strategy', name: 'ビジネスストラテジ' }, { id: 'legal', name: '法規・標準' },
+      { id: 'system-arch', name: 'システムアーキテクチャ' }, { id: 'service-mgmt', name: 'サービスマネジメント' },
+    ];
+    // 重複除去
+    const seenCats = new Set();
+    const uniqueCats = cats.filter(c => { if (seenCats.has(c.id)) return false; seenCats.add(c.id); return true; });
+
+    let _known = new Set(JSON.parse(localStorage.getItem('ap_fc_known') || '[]'));
+    let _catFilter = '';
+    let _cards = [];
+    let _idx = 0;
+    let _flipped = false;
+    let _showKnown = false;
+
+    function saveKnown() {
+      localStorage.setItem('ap_fc_known', JSON.stringify([..._known]));
+    }
+
+    function getCards() {
+      let data = GLOSSARY_DATA.filter(g => !_catFilter || g.category === _catFilter);
+      if (!_showKnown) data = data.filter(g => !_known.has(g.term));
+      return data.length > 0 ? data : GLOSSARY_DATA.filter(g => !_catFilter || g.category === _catFilter);
+    }
+
+    function renderCard() {
+      const cardEl  = document.getElementById('fc-card');
+      const frontEl = document.getElementById('fc-front');
+      const backEl  = document.getElementById('fc-back');
+      const counterEl = document.getElementById('fc-counter');
+      const knownEl   = document.getElementById('fc-known-count');
+      if (!cardEl) return;
+      _cards = getCards();
+      if (_cards.length === 0) {
+        cardEl.innerHTML = '<div class="fc-empty">全カードを学習済みです！🎉</div>';
+        document.getElementById('fc-known-btn').style.display = 'none';
+        document.getElementById('fc-unknown-btn').style.display = 'none';
+        if (counterEl) counterEl.textContent = '0 / 0';
+        return;
+      }
+      if (_idx >= _cards.length) _idx = 0;
+      const card = _cards[_idx];
+      _flipped = false;
+      cardEl.classList.remove('flipped');
+      if (frontEl) frontEl.textContent = card.term;
+      if (backEl)  backEl.textContent  = card.definition;
+      if (counterEl) counterEl.textContent = `${_idx + 1} / ${_cards.length}`;
+      if (knownEl)   knownEl.textContent   = `既知 ${_known.size} / ${GLOSSARY_DATA.length}`;
+      const isKnown = _known.has(card.term);
+      document.getElementById('fc-known-btn').textContent    = isKnown ? '✅ 既知済み' : '✅ 覚えた！';
+      document.getElementById('fc-known-btn').className      = `btn ${isKnown ? 'btn-success' : 'btn-primary'} btn-sm`;
+      document.getElementById('fc-unknown-btn').style.display = '';
+      document.getElementById('fc-known-btn').style.display   = '';
+    }
+
+    const catOptions = uniqueCats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+    document.getElementById('app').innerHTML = `
+      <section class="container" style="padding-top:80px;padding-bottom:64px;max-width:680px;">
+        <div class="page-header">
+          <h1 class="page-title">🃏 単語フラッシュカード</h1>
+          <p class="page-subtitle">カードをタップ / クリックで裏返し。用語の定義を確認しましょう。</p>
+        </div>
+
+        <!-- コントロール -->
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:24px;">
+          <select id="fc-cat" class="form-control" style="flex:1;min-width:150px;">${catOptions}</select>
+          <label style="display:flex;align-items:center;gap:6px;font-size:.875rem;cursor:pointer;white-space:nowrap;">
+            <input type="checkbox" id="fc-show-known"> 既知も表示
+          </label>
+          <span id="fc-known-count" style="font-size:.85rem;color:var(--color-text-muted);white-space:nowrap;">既知 0 / ${GLOSSARY_DATA.length}</span>
+        </div>
+
+        <!-- カード -->
+        <div class="fc-card" id="fc-card" title="クリックで裏返す">
+          <div class="fc-card-inner">
+            <div class="fc-front" id="fc-front"></div>
+            <div class="fc-back" id="fc-back"></div>
+          </div>
+        </div>
+
+        <!-- ナビゲーション -->
+        <div class="fc-nav">
+          <button class="btn btn-secondary btn-sm" id="fc-prev">← 前</button>
+          <span id="fc-counter" style="font-size:.9rem;color:var(--color-text-muted);">1 / 1</span>
+          <button class="btn btn-secondary btn-sm" id="fc-next">次 →</button>
+        </div>
+
+        <!-- アクション -->
+        <div class="fc-actions">
+          <button class="btn btn-outline btn-sm" id="fc-unknown-btn">❌ まだ覚えていない</button>
+          <button class="btn btn-primary btn-sm" id="fc-known-btn">✅ 覚えた！</button>
+        </div>
+
+        <!-- プログレス -->
+        <div style="margin-top:20px;">
+          <div style="display:flex;justify-content:space-between;font-size:.75rem;color:var(--color-text-muted);margin-bottom:4px;">
+            <span>学習進捗</span>
+            <span id="fc-pct">0%</span>
+          </div>
+          <div class="progress" style="height:8px;">
+            <div class="progress-bar" id="fc-prog-bar" style="width:0%;transition:width .4s;"></div>
+          </div>
+        </div>
+      </section>`;
+
+    renderCard();
+    updateProg();
+
+    function updateProg() {
+      const pct = Math.round(_known.size / GLOSSARY_DATA.length * 100);
+      const pb = document.getElementById('fc-prog-bar');
+      const pt = document.getElementById('fc-pct');
+      if (pb) pb.style.width = pct + '%';
+      if (pt) pt.textContent = pct + '%';
+    }
+
+    document.getElementById('fc-card').addEventListener('click', () => {
+      document.getElementById('fc-card').classList.toggle('flipped');
+      _flipped = !_flipped;
+    });
+
+    document.getElementById('fc-prev').addEventListener('click', () => {
+      _idx = (_idx - 1 + _cards.length) % _cards.length;
+      renderCard();
+    });
+    document.getElementById('fc-next').addEventListener('click', () => {
+      _idx = (_idx + 1) % _cards.length;
+      renderCard();
+    });
+
+    document.getElementById('fc-known-btn').addEventListener('click', () => {
+      if (_cards[_idx]) {
+        const term = _cards[_idx].term;
+        if (_known.has(term)) { _known.delete(term); } else { _known.add(term); }
+        saveKnown();
+        updateProg();
+        _idx = (_idx + 1) % Math.max(1, getCards().length);
+        renderCard();
+      }
+    });
+    document.getElementById('fc-unknown-btn').addEventListener('click', () => {
+      _idx = (_idx + 1) % Math.max(1, _cards.length);
+      renderCard();
+    });
+
+    document.getElementById('fc-cat').addEventListener('change', e => {
+      _catFilter = e.target.value; _idx = 0; renderCard();
+    });
+    document.getElementById('fc-show-known').addEventListener('change', e => {
+      _showKnown = e.target.checked; _idx = 0; renderCard();
+    });
+
+    // キーボード操作
+    function fcKeyHandler(e) {
+      if (e.key === ' ' || e.key === 'Enter') { document.getElementById('fc-card').click(); e.preventDefault(); }
+      if (e.key === 'ArrowRight') document.getElementById('fc-next').click();
+      if (e.key === 'ArrowLeft')  document.getElementById('fc-prev').click();
+      if (e.key === 'k' || e.key === 'K') document.getElementById('fc-known-btn').click();
+    }
+    document.removeEventListener('keydown', window._fcKeyHandler);
+    window._fcKeyHandler = fcKeyHandler;
+    document.addEventListener('keydown', fcKeyHandler);
+  }
+
   // ─── 公開 API ─────────────────────────────────────────
   return {
     renderHome, renderSubjects, renderSubjectDetail,
     renderQuizSetup, renderQuestion, renderResult,
     renderDashboard, renderExamInfo,
     renderGlossary, renderPlan, renderPmExam, renderCheatsheet,
-    renderQuestions, render404,
+    renderQuestions, renderFlashcard, render404,
   };
 })();
