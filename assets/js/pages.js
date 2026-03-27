@@ -1207,6 +1207,83 @@ const Pages = (() => {
       </div>`;
   }
 
+  // ─── SVG レーダーチャート ─────────────────────────── //
+  function buildRadarChart(catStats) {
+    const size = 320; const cx = size / 2; const cy = size / 2; const r = 120;
+    const N = catStats.length;
+    if (N < 3) return '';
+
+    function pt(i, pct) {
+      const angle = -Math.PI / 2 + (2 * Math.PI * i) / N;
+      return {
+        x: cx + r * (pct / 100) * Math.cos(angle),
+        y: cy + r * (pct / 100) * Math.sin(angle),
+      };
+    }
+
+    // 背景グリッド（同心多角形）
+    const gridLevels = [20, 40, 60, 80, 100];
+    const gridLines = gridLevels.map(lv => {
+      const pts = Array.from({ length: N }, (_, i) => {
+        const p = pt(i, lv);
+        return `${p.x},${p.y}`;
+      }).join(' ');
+      return `<polygon points="${pts}" fill="none" stroke="var(--color-border)" stroke-width="${lv === 60 ? 1.5 : 0.8}" ${lv === 60 ? 'stroke-dasharray="4,3"' : ''}/>`;
+    }).join('');
+
+    // パーセント数字ラベル（右軸上）
+    const gridLabels = gridLevels.map(lv => {
+      const p = pt(0, lv);
+      return `<text x="${p.x + 4}" y="${p.y - 3}" font-size="8" fill="var(--color-text-muted)">${lv}%</text>`;
+    }).join('');
+
+    // 軸線
+    const axes = Array.from({ length: N }, (_, i) => {
+      const p = pt(i, 100);
+      return `<line x1="${cx}" y1="${cy}" x2="${p.x}" y2="${p.y}" stroke="var(--color-border)" stroke-width="1"/>`;
+    }).join('');
+
+    // データポリゴン
+    const dataPoints = catStats.map((c, i) => {
+      const acc = c.attempts > 0 ? c.accuracy : 0;
+      const p = pt(i, acc);
+      return `${p.x},${p.y}`;
+    }).join(' ');
+
+    // ドット
+    const dots = catStats.map((c, i) => {
+      const acc = c.attempts > 0 ? c.accuracy : 0;
+      const p = pt(i, acc);
+      const color = acc >= 70 ? 'var(--color-success)' : acc >= 50 ? 'var(--color-warning)' : 'var(--color-error)';
+      return `<circle cx="${p.x}" cy="${p.y}" r="4" fill="${color}" stroke="var(--color-surface)" stroke-width="1.5"/>`;
+    }).join('');
+
+    // ラベル
+    const labels = catStats.map((c, i) => {
+      const angle = -Math.PI / 2 + (2 * Math.PI * i) / N;
+      const lx = cx + (r + 22) * Math.cos(angle);
+      const ly = cy + (r + 22) * Math.sin(angle);
+      const anchor = Math.abs(lx - cx) < 5 ? 'middle' : lx < cx ? 'end' : 'start';
+      const short = c.name.length > 6 ? c.name.slice(0, 6) : c.name;
+      const accLabel = c.attempts > 0 ? `(${c.accuracy}%)` : '';
+      return `
+        <text x="${lx}" y="${ly - 4}" text-anchor="${anchor}" font-size="9.5" font-weight="600" fill="var(--color-text)">${short}</text>
+        <text x="${lx}" y="${ly + 8}" text-anchor="${anchor}" font-size="8.5" fill="var(--color-text-muted)">${accLabel}</text>
+      `;
+    }).join('');
+
+    const hasData = catStats.some(c => c.attempts > 0);
+    return `
+      <svg viewBox="0 0 ${size} ${size}" style="width:100%;max-width:${size}px;display:block;margin:0 auto;">
+        ${gridLines}${gridLabels}${axes}
+        ${hasData ? `<polygon points="${dataPoints}" fill="rgba(59,91,219,.18)" stroke="var(--color-primary)" stroke-width="2" stroke-linejoin="round"/>` : ''}
+        ${hasData ? dots : ''}
+        ${labels}
+        ${!hasData ? `<text x="${cx}" y="${cy+6}" text-anchor="middle" font-size="12" fill="var(--color-text-muted)">演習後に表示されます</text>` : ''}
+      </svg>
+    `;
+  }
+
   // ─── ダッシュボード ────────────────────────────────── //
   function renderDashboard() {
     const stats    = Store.getOverallStats();
@@ -1315,10 +1392,14 @@ const Pages = (() => {
           <div class="stats-grid">${statCards}</div>
 
           <div class="grid-2" style="gap:24px;">
-            <!-- 分野別正答率チャート -->
+            <!-- 分野別正答率チャート + レーダー -->
             <div class="chart-wrap">
               <h2 class="chart-title">📊 分野別正答率</h2>
               ${svgChart}
+              <div style="margin-top:24px;">
+                <h2 class="chart-title" style="margin-bottom:12px;">🕸 弱点レーダーチャート</h2>
+                ${buildRadarChart(catStats)}
+              </div>
             </div>
 
             <!-- 正答率推移 -->
@@ -1360,9 +1441,10 @@ const Pages = (() => {
             </p>
           </div>
 
-          <!-- エクスポート / インポート / リセット -->
+          <!-- エクスポート / インポート / リセット / レポート -->
           <div style="text-align:center;margin-top:40px;padding-top:24px;border-top:1px solid var(--color-border);">
             <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:12px;">
+              <a href="#/report" class="btn btn-secondary btn-sm">🖨 学習レポートを印刷</a>
               <button class="btn btn-secondary btn-sm" id="export-btn">⬇️ データをエクスポート</button>
               <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
                 ⬆️ データをインポート
@@ -2519,12 +2601,159 @@ const Pages = (() => {
     document.addEventListener('keydown', fcKeyHandler);
   }
 
+  // ─── 学習レポート ─────────────────────────────────── //
+  function renderReport() {
+    const stats    = Store.getOverallStats();
+    const catStats = Store.getCategoryStats();
+    const badges   = Store.getEarnedBadges().filter(b => b.earned);
+    const weak     = Store.getWeakQuestions(10);
+    const recent   = Store.getRecentSessions(10);
+    const today    = new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' });
+
+    const catRows = catStats.map(c => {
+      const acc = c.attempts > 0 ? c.accuracy : null;
+      const bar = acc !== null ? `<div style="height:8px;background:#e9ecef;border-radius:4px;margin-top:4px;"><div style="height:8px;width:${acc}%;background:${categoryColor(c.id)};border-radius:4px;"></div></div>` : '';
+      return `
+        <tr>
+          <td style="padding:6px 8px;">${c.name}</td>
+          <td style="padding:6px 8px;text-align:center;">${c.attempts}</td>
+          <td style="padding:6px 8px;text-align:center;">${c.correct}</td>
+          <td style="padding:6px 8px;min-width:120px;">${acc !== null ? acc + '%' : '未解答'}${bar}</td>
+        </tr>`;
+    }).join('');
+
+    const weakRows = weak.map(q => `
+      <tr>
+        <td style="padding:6px 8px;font-size:.8rem;">${q.question.slice(0, 55)}…</td>
+        <td style="padding:6px 8px;text-align:center;">${q.categoryName}</td>
+        <td style="padding:6px 8px;text-align:center;">${q.attempts}</td>
+        <td style="padding:6px 8px;text-align:center;">${Math.round(q.correctRate * 100)}%</td>
+      </tr>`).join('');
+
+    mount(`
+      <div class="page fade-in report-page">
+        <div class="container" style="max-width:800px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+            <div>
+              <h1 style="font-size:1.5rem;font-weight:700;margin:0;">📊 学習レポート</h1>
+              <p style="color:var(--color-text-muted);margin:4px 0 0;font-size:.875rem;">出力日: ${today}</p>
+            </div>
+            <div style="display:flex;gap:8px;" class="no-print">
+              <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 印刷 / PDF保存</button>
+              <a href="#/dashboard" class="btn btn-secondary btn-sm">← ダッシュボードへ</a>
+            </div>
+          </div>
+
+          <!-- 総合成績 -->
+          <div class="report-section">
+            <h2 class="report-section__title">総合成績</h2>
+            <div class="report-summary-grid">
+              <div class="report-summary-item">
+                <div class="report-summary-value">${stats.totalAttempts}</div>
+                <div class="report-summary-label">総回答数</div>
+              </div>
+              <div class="report-summary-item">
+                <div class="report-summary-value">${stats.accuracy}%</div>
+                <div class="report-summary-label">全体正答率</div>
+              </div>
+              <div class="report-summary-item">
+                <div class="report-summary-value">${stats.totalAttempted}</div>
+                <div class="report-summary-label">挑戦問題数</div>
+              </div>
+              <div class="report-summary-item">
+                <div class="report-summary-value">${stats.streak}日</div>
+                <div class="report-summary-label">連続学習日数</div>
+              </div>
+              <div class="report-summary-item">
+                <div class="report-summary-value">${stats.sessionsCount}</div>
+                <div class="report-summary-label">演習回数</div>
+              </div>
+              <div class="report-summary-item">
+                <div class="report-summary-value">${badges.length}</div>
+                <div class="report-summary-label">バッジ獲得数</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 分野別 -->
+          <div class="report-section">
+            <h2 class="report-section__title">分野別正答率</h2>
+            <table class="report-table">
+              <thead>
+                <tr><th>分野</th><th>回答数</th><th>正解数</th><th>正答率</th></tr>
+              </thead>
+              <tbody>${catRows}</tbody>
+            </table>
+          </div>
+
+          <!-- レーダーチャート -->
+          <div class="report-section">
+            <h2 class="report-section__title">弱点レーダーチャート</h2>
+            ${buildRadarChart(catStats)}
+          </div>
+
+          <!-- 弱点問題 -->
+          ${weak.length > 0 ? `
+          <div class="report-section">
+            <h2 class="report-section__title">苦手問題（正答率 60% 未満）</h2>
+            <table class="report-table">
+              <thead><tr><th>問題</th><th>分野</th><th>回答</th><th>正答率</th></tr></thead>
+              <tbody>${weakRows}</tbody>
+            </table>
+          </div>` : ''}
+
+          <!-- バッジ -->
+          ${badges.length > 0 ? `
+          <div class="report-section">
+            <h2 class="report-section__title">獲得バッジ</h2>
+            <div style="display:flex;flex-wrap:wrap;gap:12px;">
+              ${badges.map(b => `
+                <div style="display:flex;align-items:center;gap:6px;padding:8px 12px;background:var(--color-surface-2);border-radius:8px;">
+                  <span style="font-size:1.25rem;">${b.icon}</span>
+                  <span style="font-size:.85rem;font-weight:600;">${b.name}</span>
+                </div>`).join('')}
+            </div>
+          </div>` : ''}
+
+          <!-- 直近セッション -->
+          ${recent.length > 0 ? `
+          <div class="report-section">
+            <h2 class="report-section__title">直近 ${recent.length} 回の演習</h2>
+            <table class="report-table">
+              <thead><tr><th>日時</th><th>モード</th><th>問題数</th><th>正解</th><th>正答率</th><th>時間</th></tr></thead>
+              <tbody>
+                ${recent.map(s => {
+                  const d = new Date(s.date);
+                  const dateStr = `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+                  const modeLabel = s.mode === 'mock_exam' ? '本番模擬' : s.mode === 'exam' ? '模擬試験' : s.mode === 'category' ? '分野別' : s.mode === 'weak' ? '弱点集中' : 'ランダム';
+                  const acc = Math.round(s.correct / s.total * 100);
+                  return `<tr>
+                    <td style="padding:5px 8px;font-size:.8rem;">${dateStr}</td>
+                    <td style="padding:5px 8px;font-size:.8rem;">${modeLabel}</td>
+                    <td style="padding:5px 8px;text-align:center;">${s.total}</td>
+                    <td style="padding:5px 8px;text-align:center;">${s.correct}</td>
+                    <td style="padding:5px 8px;text-align:center;font-weight:700;color:${acc>=60?'#2F9E44':'#E03131'};">${acc}%</td>
+                    <td style="padding:5px 8px;text-align:center;">${fmtTime(s.durationSec||0)}</td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>` : ''}
+
+          <p style="text-align:center;color:var(--color-text-muted);font-size:.75rem;margin-top:24px;" class="no-print">
+            応用情報技術者試験 攻略サイト — ${today} 出力
+          </p>
+        </div>
+      </div>
+    `);
+  }
+
   // ─── 公開 API ─────────────────────────────────────────
   return {
     renderHome, renderSubjects, renderSubjectDetail,
     renderQuizSetup, renderQuestion, renderResult,
     renderDashboard, renderExamInfo,
     renderGlossary, renderPlan, renderPmExam, renderCheatsheet,
-    renderQuestions, renderFlashcard, render404,
+    renderQuestions, renderFlashcard, renderReport, render404,
   };
 })();

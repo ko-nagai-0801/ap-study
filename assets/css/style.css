@@ -967,6 +967,49 @@ select.form-control { appearance: none; padding-right: 36px;
   100% { transform: rotateY(180deg); }
 }
 
+/* ─── レポートページ ─────────────────────────────────── */
+.report-section {
+  background: var(--color-surface); border-radius: var(--radius-lg);
+  padding: 24px; margin-bottom: 20px;
+  box-shadow: var(--shadow-sm);
+}
+.report-section__title {
+  font-size: 1rem; font-weight: 700; margin-bottom: 16px;
+  padding-bottom: 10px; border-bottom: 2px solid var(--color-border);
+}
+.report-summary-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+}
+.report-summary-item {
+  text-align: center; padding: 14px 8px;
+  background: var(--color-surface-2); border-radius: var(--radius-md);
+}
+.report-summary-value {
+  font-size: 1.75rem; font-weight: 700; font-family: var(--font-en);
+}
+.report-summary-label { font-size: .75rem; color: var(--color-text-muted); margin-top: 4px; }
+.report-table {
+  width: 100%; border-collapse: collapse; font-size: .85rem;
+}
+.report-table th {
+  background: var(--color-surface-2); padding: 8px;
+  text-align: left; font-weight: 700; font-size: .8rem;
+  border-bottom: 2px solid var(--color-border);
+}
+.report-table tbody tr:nth-child(even) { background: var(--color-surface-2); }
+
+@media print {
+  .no-print { display: none !important; }
+  .header, .footer, .drawer, .overlay, .toast-container { display: none !important; }
+  .report-section { box-shadow: none; border: 1px solid #dee2e6; }
+  .report-summary-item { border: 1px solid #dee2e6; }
+  body { background: white; }
+}
+
+@media (max-width: 480px) {
+  .report-summary-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
 /* ─── 18. フッター ────────────────────────────────────── */
 .footer {
   background: var(--color-surface);
