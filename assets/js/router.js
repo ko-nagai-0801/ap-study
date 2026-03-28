@@ -18,6 +18,7 @@ const Router = (() => {
     '/questions':   () => Pages.renderQuestions(),
     '/flashcard':   () => Pages.renderFlashcard(),
     '/report':      () => Pages.renderReport(),
+    '/memos':       () => Pages.renderMemos(),
   };
 
   // 動的ルート: /subjects/:id

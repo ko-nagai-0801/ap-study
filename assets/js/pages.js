@@ -53,6 +53,7 @@ const Pages = (() => {
   function renderHome() {
     const stats = Store.getOverallStats();
     const hasPrev = stats.totalAttempts > 0;
+    const dueCount = Store.getDueQuestions(999).length;
 
     const progressBanner = hasPrev ? `
       <section class="section" style="padding-top:32px; padding-bottom:0;">
@@ -134,6 +135,19 @@ const Pages = (() => {
         </section>
 
         ${progressBanner}
+
+        ${dueCount > 0 ? `
+        <section style="padding-top:${hasPrev ? '0' : '32px'};padding-bottom:0;">
+          <div class="container">
+            <a href="#/quiz?mode=review" class="review-reminder">
+              <span class="review-reminder__icon">🔄</span>
+              <div class="review-reminder__text">
+                <strong>今日の間隔反復復習: ${dueCount} 問</strong> が待っています。今すぐ復習して記憶を定着させましょう。
+              </div>
+              <span class="review-reminder__arrow">→</span>
+            </a>
+          </div>
+        </section>` : ''}
 
         <!-- 対応分野 -->
         <section class="section">
@@ -1447,6 +1461,51 @@ const Pages = (() => {
     }
     const trendChart = buildTrendChart(recent);
 
+    // 週間学習バーチャート（直近7日）
+    function buildWeeklyBar(sessions) {
+      const days = 7;
+      const today = new Date();
+      const dayLabels = [];
+      const dayCounts = [];
+      const dayCorrects = [];
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        const ds = d.toDateString();
+        dayLabels.push(i === 0 ? '今日' : `${d.getMonth()+1}/${d.getDate()}`);
+        const daySess = sessions.filter(s => new Date(s.date).toDateString() === ds);
+        dayCounts.push(daySess.reduce((s, ss) => s + ss.total, 0));
+        dayCorrects.push(daySess.reduce((s, ss) => s + ss.correct, 0));
+      }
+      const maxVal = Math.max(...dayCounts, 1);
+      const W = 400; const H = 100; const padB = 22; const padT = 8; const gap = 6;
+      const barW = Math.floor((W - gap * (days + 1)) / days);
+      const bars = dayLabels.map((lbl, i) => {
+        const x = gap + i * (barW + gap);
+        const bh = Math.round((dayCounts[i] / maxVal) * (H - padT - padB));
+        const by = H - padB - bh;
+        const isToday = i === days - 1;
+        const color = isToday ? 'var(--color-primary)' : 'var(--color-surface-2)';
+        const stroke = isToday ? 'var(--color-primary)' : 'var(--color-border)';
+        return `
+          <rect x="${x}" y="${bh > 0 ? by : H - padB}" width="${barW}" height="${Math.max(bh, 2)}"
+            fill="${color}" stroke="${stroke}" stroke-width="0.5" rx="3"/>
+          ${dayCounts[i] > 0 ? `<text x="${x + barW/2}" y="${by - 3}" text-anchor="middle" font-size="8.5" font-weight="600" fill="var(--color-text)">${dayCounts[i]}</text>` : ''}
+          <text x="${x + barW/2}" y="${H - 6}" text-anchor="middle" font-size="9" fill="${isToday ? 'var(--color-primary)' : 'var(--color-text-muted)'}" font-weight="${isToday ? '700' : '400'}">${lbl}</text>
+        `;
+      }).join('');
+      const totalWeek = dayCounts.reduce((s, v) => s + v, 0);
+      const correctWeek = dayCorrects.reduce((s, v) => s + v, 0);
+      const weekAcc = totalWeek > 0 ? Math.round(correctWeek / totalWeek * 100) : 0;
+      return `
+        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+          <span style="font-size:.8rem;color:var(--color-text-muted);">週計: <strong style="color:var(--color-text);">${totalWeek} 問</strong></span>
+          <span style="font-size:.8rem;color:var(--color-text-muted);">週平均正答率: <strong style="color:var(--color-text);">${weekAcc}%</strong></span>
+        </div>
+        <svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:${H}px;">${bars}</svg>`;
+    }
+    const weeklyBar = buildWeeklyBar(Store.getRecentSessions(500));
+
     // 最近のセッション
     const recentHtml = recent.length > 0
       ? recent.map(s => {
@@ -1489,9 +1548,11 @@ const Pages = (() => {
               </div>
             </div>
 
-            <!-- 正答率推移 -->
+            <!-- 正答率推移 + 週間バー -->
             <div class="chart-wrap">
-              <h2 class="chart-title" style="margin-bottom:12px;">📈 正答率の推移（直近 10 回）</h2>
+              <h2 class="chart-title" style="margin-bottom:8px;">📅 週間学習バー（直近 7 日）</h2>
+              ${weeklyBar}
+              <h2 class="chart-title" style="margin-bottom:12px;margin-top:20px;">📈 正答率の推移（直近 10 回）</h2>
               ${trendChart}
               <div style="margin-top:12px;">
                 <h3 style="font-size:.875rem;font-weight:700;margin-bottom:8px;">🕐 最近の演習</h3>
@@ -2846,12 +2907,140 @@ const Pages = (() => {
     `);
   }
 
+  // ─── メモ一覧 ─────────────────────────────────────── //
+  function renderMemos() {
+    function buildList() {
+      const count = Store.getMemoCount();
+      if (count === 0) {
+        return `
+          <div class="memo-list-empty">
+            <div style="font-size:3rem;margin-bottom:16px;">📝</div>
+            <p>保存済みのメモはありません。</p>
+            <p style="font-size:.85rem;color:var(--color-text-muted);margin-top:8px;">
+              演習中に解説ページ下部のメモ欄から書き込めます。
+            </p>
+            <a href="#/quiz" class="btn btn-primary btn-sm" style="margin-top:20px;">演習を始める →</a>
+          </div>`;
+      }
+
+      const items = QUESTIONS_DATA
+        .filter(q => Store.hasMemo(q.id))
+        .map(q => {
+          const memo = Store.getMemo(q.id);
+          const prog = Store.getProgress(q.id);
+          const acc  = prog.attempts > 0 ? Math.round(prog.correct / prog.attempts * 100) : null;
+          return `
+            <div class="memo-list-item" id="memo-item-${q.id}">
+              <div class="memo-list-item__header">
+                <div class="memo-list-item__meta">
+                  <span class="badge badge-neutral" style="font-size:.7rem;">${q.categoryName}</span>
+                  ${diffLabel(q.difficulty)}
+                  ${acc !== null ? `<span class="badge ${acc >= 60 ? 'badge-success' : 'badge-error'}" style="font-size:.7rem;">正答率 ${acc}%</span>` : ''}
+                </div>
+                <div class="memo-list-item__actions">
+                  <a href="#/quiz?mode=category&category=${q.category}" class="btn btn-secondary btn-sm" style="font-size:.75rem;">演習</a>
+                  <button class="btn btn-sm" style="color:var(--color-error);border:1px solid var(--color-border);" data-delete="${q.id}">削除</button>
+                </div>
+              </div>
+              <div class="memo-list-item__question">${q.question}</div>
+              <div class="memo-list-item__memo" id="memo-text-${q.id}">
+                <span class="memo-list-item__memo-icon">📝</span>
+                <span id="memo-content-${q.id}">${memo.replace(/\n/g, '<br>')}</span>
+                <button class="memo-edit-btn" data-edit="${q.id}" title="編集">✏️</button>
+              </div>
+              <div class="memo-edit-wrap" id="memo-edit-${q.id}" style="display:none;">
+                <textarea class="memo-textarea" id="memo-input-${q.id}" rows="3">${memo}</textarea>
+                <div class="memo-actions">
+                  <button class="btn btn-primary btn-sm" data-save="${q.id}">保存</button>
+                  <button class="btn btn-secondary btn-sm" data-cancel="${q.id}">キャンセル</button>
+                </div>
+              </div>
+            </div>`;
+        }).join('');
+
+      return `<div class="memo-list">${items}</div>`;
+    }
+
+    mount(`
+      <div class="page fade-in">
+        <div class="container" style="max-width:760px;">
+          <div class="page-header">
+            <h1 class="page-title">📝 メモ一覧</h1>
+            <p class="page-subtitle">演習中に保存したメモを一覧表示します</p>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+            <span style="font-size:.875rem;color:var(--color-text-muted);">
+              ${Store.getMemoCount()} 件のメモ
+            </span>
+            <div style="display:flex;gap:8px;">
+              <input type="search" id="memo-search" class="form-control"
+                placeholder="キーワードで絞り込み…" style="max-width:220px;">
+            </div>
+          </div>
+
+          <div id="memo-list-container">${buildList()}</div>
+        </div>
+      </div>
+    `);
+
+    // 検索フィルター
+    const searchEl = document.getElementById('memo-search');
+    if (searchEl) {
+      searchEl.addEventListener('input', () => {
+        const kw = searchEl.value.toLowerCase();
+        document.querySelectorAll('.memo-list-item').forEach(el => {
+          const text = el.textContent.toLowerCase();
+          el.style.display = text.includes(kw) ? '' : 'none';
+        });
+      });
+    }
+
+    // 削除・編集イベント
+    document.getElementById('memo-list-container').addEventListener('click', e => {
+      const delId = e.target.dataset.delete;
+      if (delId) {
+        if (confirm('このメモを削除しますか？')) {
+          Store.setMemo(delId, '');
+          document.getElementById(`memo-item-${delId}`)?.remove();
+          if (Store.getMemoCount() === 0) {
+            document.getElementById('memo-list-container').innerHTML = buildList();
+          }
+          showToast('メモを削除しました');
+        }
+        return;
+      }
+      const editId = e.target.dataset.edit;
+      if (editId) {
+        document.getElementById(`memo-text-${editId}`).style.display = 'none';
+        document.getElementById(`memo-edit-${editId}`).style.display = '';
+        document.getElementById(`memo-input-${editId}`)?.focus();
+        return;
+      }
+      const saveId = e.target.dataset.save;
+      if (saveId) {
+        const text = document.getElementById(`memo-input-${saveId}`).value;
+        Store.setMemo(saveId, text);
+        document.getElementById(`memo-content-${saveId}`).innerHTML = text.replace(/\n/g, '<br>');
+        document.getElementById(`memo-text-${saveId}`).style.display = '';
+        document.getElementById(`memo-edit-${saveId}`).style.display = 'none';
+        showToast('メモを保存しました', 'success');
+        return;
+      }
+      const cancelId = e.target.dataset.cancel;
+      if (cancelId) {
+        document.getElementById(`memo-text-${cancelId}`).style.display = '';
+        document.getElementById(`memo-edit-${cancelId}`).style.display = 'none';
+      }
+    });
+  }
+
   // ─── 公開 API ─────────────────────────────────────────
   return {
     renderHome, renderSubjects, renderSubjectDetail,
     renderQuizSetup, renderQuestion, renderResult,
     renderDashboard, renderExamInfo,
     renderGlossary, renderPlan, renderPmExam, renderCheatsheet,
-    renderQuestions, renderFlashcard, renderReport, render404,
+    renderQuestions, renderFlashcard, renderReport, renderMemos, render404,
   };
 })();
