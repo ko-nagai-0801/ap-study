@@ -120,10 +120,15 @@ const Pages = (() => {
                 <div class="hero__meta-value">${GLOSSARY_DATA.length}</div>
                 <div class="hero__meta-label">用語集収録数</div>
               </div>
+              ${hasPrev ? `
+              <div class="hero__meta-item">
+                <div class="hero__meta-value" style="color:var(--color-primary);">${Math.round(stats.totalAttempted / QUESTIONS_DATA.length * 100)}%</div>
+                <div class="hero__meta-label">問題攻略率</div>
+              </div>` : `
               <div class="hero__meta-item">
                 <div class="hero__meta-value">100%</div>
                 <div class="hero__meta-label">無料・登録不要</div>
-              </div>
+              </div>`}
             </div>
           </div>
         </section>
@@ -1284,6 +1289,85 @@ const Pages = (() => {
     `;
   }
 
+  // ─── SVG リングチャート ──────────────────────────────
+  function buildRingChart(pct, label, size, color) {
+    size  = size  || 110;
+    color = color || 'var(--color-primary)';
+    const r    = (size - 18) / 2;
+    const cx   = size / 2;
+    const cy   = size / 2;
+    const circ = 2 * Math.PI * r;
+    const dash = ((pct / 100) * circ).toFixed(1);
+    const gap  = (circ - dash).toFixed(1);
+    return `
+      <svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" style="display:block;margin:0 auto;">
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--color-surface-2)" stroke-width="12"/>
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="12"
+          stroke-dasharray="${dash} ${gap}" stroke-linecap="round"
+          transform="rotate(-90 ${cx} ${cy})" style="transition:stroke-dasharray .6s ease;"/>
+        <text x="${cx}" y="${cy + 6}" text-anchor="middle" font-size="18" font-weight="700" fill="var(--color-text)">${pct}%</text>
+      </svg>
+      <div class="ring-chart-label">${label}</div>`;
+  }
+
+  // ─── 試験日カウントダウンウィジェット ────────────────
+  function buildExamCountdown(stats) {
+    const examDate  = Store.getSetting('examDate');
+    const dailyGoal = Store.getSetting('dailyGoal') || 20;
+    const todayDone = stats.todayTotal;
+    const goalPct   = Math.min(100, Math.round(todayDone / dailyGoal * 100));
+    const covPct    = Math.min(100, Math.round(stats.totalAttempted / QUESTIONS_DATA.length * 100));
+
+    let cdInner = '';
+    if (examDate) {
+      const exam = new Date(examDate + 'T00:00:00');
+      const diffDays = Math.max(0, Math.ceil((exam - new Date()) / 86400000));
+      const urgColor = diffDays <= 30 ? 'var(--color-error)' : diffDays <= 90 ? 'var(--color-warning)' : 'var(--color-success)';
+      cdInner = `
+        <div class="cd-days" style="color:${urgColor};">${diffDays}</div>
+        <div class="cd-days-label">日後に試験</div>
+        <div class="cd-date">${exam.getFullYear()}/${exam.getMonth()+1}/${exam.getDate()}</div>`;
+    } else {
+      cdInner = `<div class="cd-nodate">試験日を設定すると<br>カウントダウンが表示されます</div>`;
+    }
+
+    return `
+      <div class="countdown-widget">
+        <div class="cd-left">
+          <h3 class="cd-title">📅 試験日まで</h3>
+          <div class="cd-inner">${cdInner}</div>
+          <div class="cd-setrow">
+            <input type="date" id="exam-date-input" class="form-control"
+              style="max-width:160px;font-size:.85rem;"
+              value="${examDate || ''}"
+              min="${new Date().toISOString().slice(0,10)}">
+            <button class="btn btn-primary btn-sm" id="exam-date-save">設定</button>
+          </div>
+          <div class="cd-goal-row">
+            <label style="font-size:.8rem;color:var(--color-text-muted);">1日目標</label>
+            <input type="number" id="daily-goal-input" class="form-control"
+              style="width:72px;font-size:.85rem;" value="${dailyGoal}" min="1" max="100">
+            <span style="font-size:.8rem;color:var(--color-text-muted);">問</span>
+            <button class="btn btn-secondary btn-sm" id="daily-goal-save">更新</button>
+          </div>
+        </div>
+        <div class="cd-rings">
+          <div class="ring-wrap">
+            ${buildRingChart(goalPct, '今日の目標達成率', 110, 'var(--color-success)')}
+            <div class="ring-sub">${todayDone} / ${dailyGoal} 問</div>
+          </div>
+          <div class="ring-wrap">
+            ${buildRingChart(covPct, '問題攻略率', 110, 'var(--color-primary)')}
+            <div class="ring-sub">${stats.totalAttempted} / ${QUESTIONS_DATA.length} 問</div>
+          </div>
+          <div class="ring-wrap">
+            ${buildRingChart(stats.accuracy, '全体正答率', 110, stats.accuracy >= 60 ? 'var(--color-success)' : 'var(--color-error)')}
+            <div class="ring-sub">${stats.totalAttempts} 問回答</div>
+          </div>
+        </div>
+      </div>`;
+  }
+
   // ─── ダッシュボード ────────────────────────────────── //
   function renderDashboard() {
     const stats    = Store.getOverallStats();
@@ -1388,6 +1472,9 @@ const Pages = (() => {
             <p class="page-subtitle">あなたの学習進捗を確認しましょう</p>
           </div>
 
+          <!-- 試験日カウントダウン + 進捗リング -->
+          ${buildExamCountdown(stats)}
+
           <!-- 統計カード -->
           <div class="stats-grid">${statCards}</div>
 
@@ -1458,6 +1545,17 @@ const Pages = (() => {
         </div>
       </div>
     `);
+
+    document.getElementById('exam-date-save').addEventListener('click', () => {
+      const v = document.getElementById('exam-date-input').value;
+      if (v) { Store.setSetting('examDate', v); showToast('試験日を設定しました', 'success'); renderDashboard(); }
+      else   { Store.setSetting('examDate', null); showToast('試験日をクリアしました'); renderDashboard(); }
+    });
+
+    document.getElementById('daily-goal-save').addEventListener('click', () => {
+      const v = parseInt(document.getElementById('daily-goal-input').value, 10);
+      if (v > 0) { Store.setSetting('dailyGoal', v); showToast('1日目標を更新しました', 'success'); renderDashboard(); }
+    });
 
     document.getElementById('export-btn').addEventListener('click', () => {
       Store.exportData();
