@@ -1383,6 +1383,60 @@ const Pages = (() => {
   }
 
   // ─── ダッシュボード ────────────────────────────────── //
+  // タグ別正答率テーブル
+  function buildTagTable() {
+    // 全回答履歴からタグ×正誤を集計
+    const tagMap = {}; // {tagName: {correct, attempts}}
+    QUESTIONS_DATA.forEach(q => {
+      const p = Store.getProgress(q.id);
+      if (!p || p.attempts === 0) return;
+      (q.tags || []).forEach(tag => {
+        if (!tagMap[tag]) tagMap[tag] = { correct: 0, attempts: 0 };
+        tagMap[tag].correct  += p.correct  || 0;
+        tagMap[tag].attempts += p.attempts || 0;
+      });
+    });
+    const rows = Object.entries(tagMap)
+      .map(([tag, d]) => ({ tag, ...d, acc: Math.round(d.correct / d.attempts * 100) }))
+      .sort((a, b) => a.acc - b.acc); // 正答率の低い順
+
+    if (rows.length === 0) {
+      return '<p style="color:var(--color-text-muted);padding:16px 0;text-align:center;">演習を行うとタグ別分析が表示されます</p>';
+    }
+
+    const tableRows = rows.map(r => {
+      const color = r.acc >= 80 ? 'var(--color-success)' : r.acc >= 60 ? 'var(--color-warning)' : 'var(--color-error)';
+      const barW = r.acc;
+      return `
+        <tr>
+          <td style="padding:7px 10px;font-size:.82rem;white-space:nowrap;">${r.tag}</td>
+          <td style="padding:7px 10px;font-size:.82rem;text-align:right;">${r.correct}/${r.attempts}</td>
+          <td style="padding:7px 10px;min-width:100px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div style="flex:1;background:var(--color-surface-2);border-radius:4px;height:8px;overflow:hidden;">
+                <div style="width:${barW}%;height:8px;background:${color};border-radius:4px;transition:width .4s;"></div>
+              </div>
+              <span style="font-size:.8rem;font-weight:700;color:${color};min-width:34px;">${r.acc}%</span>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+
+    return `
+      <div style="overflow-x:auto;">
+        <table class="tag-table">
+          <thead>
+            <tr>
+              <th>タグ</th>
+              <th style="text-align:right;">正解/回答</th>
+              <th>正答率</th>
+            </tr>
+          </thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      </div>`;
+  }
+
   function renderDashboard() {
     const stats    = Store.getOverallStats();
     const catStats = Store.getCategoryStats();
@@ -1570,6 +1624,12 @@ const Pages = (() => {
           <div class="chart-wrap heatmap-section" style="margin-top:24px;">
             <h2 class="chart-title" style="margin-bottom:12px;">📆 学習カレンダー（直近 3 ヶ月）</h2>
             ${buildHeatmap(Store.getRecentSessions(500))}
+          </div>
+
+          <!-- タグ別正答率 -->
+          <div class="chart-wrap" style="margin-top:24px;">
+            <h2 class="chart-title" style="margin-bottom:12px;">🏷 タグ別正答率（正答率の低い順）</h2>
+            ${buildTagTable()}
           </div>
 
           <!-- 実績バッジ -->
@@ -3035,12 +3095,250 @@ const Pages = (() => {
     });
   }
 
+  // ─── タイマー ─────────────────────────────────────────
+  function renderTimer() {
+    const app = document.getElementById('app');
+
+    // ── 状態 ──────────────────────────────────────────
+    const WORK_MIN  = 25;
+    const SHORT_MIN = 5;
+    const LONG_MIN  = 15;
+    const LONG_AFTER = 4;
+
+    let mode       = 'work'; // 'work' | 'short' | 'long'
+    let totalSec   = WORK_MIN * 60;
+    let remaining  = totalSec;
+    let running    = false;
+    let intervalId = null;
+    let sessionsDone = 0;
+    let todayPomodoros = 0;
+
+    // 今日のポモドーロ数をlocalStorageから取得
+    const todayKey = 'ap_pomo_' + new Date().toDateString();
+    todayPomodoros = parseInt(localStorage.getItem(todayKey) || '0', 10);
+
+    // ── AudioContext (ビープ音) ────────────────────────
+    function beep() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        gain.gain.setValueAtTime(0.4, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.8);
+      } catch(e) {}
+    }
+
+    // ── SVG リング ────────────────────────────────────
+    function buildTimerRing(remaining, total) {
+      const size = 220;
+      const r    = 90;
+      const cx = size / 2, cy = size / 2;
+      const circ = 2 * Math.PI * r;
+      const pct  = remaining / total;
+      const dash = (pct * circ).toFixed(1);
+      const gap  = (circ - dash).toFixed(1);
+      const min  = String(Math.floor(remaining / 60)).padStart(2, '0');
+      const sec  = String(remaining % 60).padStart(2, '0');
+      const modeColor = mode === 'work' ? 'var(--color-primary)' :
+                        mode === 'short' ? 'var(--color-success)' : 'var(--color-warning)';
+      return `
+        <svg id="timer-ring-svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
+          <circle cx="${cx}" cy="${cy}" r="${r}" fill="none"
+            stroke="var(--color-surface-2)" stroke-width="14"/>
+          <circle id="timer-ring-arc" cx="${cx}" cy="${cy}" r="${r}" fill="none"
+            stroke="${modeColor}" stroke-width="14"
+            stroke-dasharray="${dash} ${gap}" stroke-linecap="round"
+            transform="rotate(-90 ${cx} ${cy})"
+            style="transition:stroke-dasharray .5s linear;"/>
+          <text id="timer-time-text" x="${cx}" y="${cy - 8}" text-anchor="middle"
+            font-size="38" font-weight="700" fill="var(--color-text)">${min}:${sec}</text>
+          <text id="timer-mode-text" x="${cx}" y="${cy + 22}" text-anchor="middle"
+            font-size="13" fill="var(--color-text-muted)">${getModeLabel()}</text>
+        </svg>`;
+    }
+
+    function getModeLabel() {
+      return mode === 'work' ? '作業中' : mode === 'short' ? '休憩' : '長休憩';
+    }
+
+    // ── 描画 ──────────────────────────────────────────
+    function render() {
+      app.innerHTML = `
+        <div class="page-header container">
+          <h1 class="page-header__title">⏱️ ポモドーロタイマー</h1>
+          <p class="page-header__sub">集中 ${WORK_MIN}分 → 休憩 ${SHORT_MIN}分のサイクルで学習効率を上げよう</p>
+        </div>
+        <div class="container timer-wrap">
+
+          <!-- タイマー本体 -->
+          <div class="timer-card">
+            <div class="timer-mode-tabs">
+              <button class="timer-tab ${mode==='work'?'active':''}" data-mode="work">作業 ${WORK_MIN}分</button>
+              <button class="timer-tab ${mode==='short'?'active':''}" data-mode="short">休憩 ${SHORT_MIN}分</button>
+              <button class="timer-tab ${mode==='long'?'active':''}" data-mode="long">長休憩 ${LONG_MIN}分</button>
+            </div>
+
+            <div class="timer-ring-wrap" id="timer-ring-wrap">
+              ${buildTimerRing(remaining, totalSec)}
+            </div>
+
+            <div class="timer-controls">
+              <button class="btn btn--outline timer-ctrl-btn" id="timer-reset-btn" aria-label="リセット">↺ リセット</button>
+              <button class="btn btn--primary timer-ctrl-btn timer-start-btn" id="timer-start-btn">
+                ${running ? '⏸ 一時停止' : '▶ スタート'}
+              </button>
+            </div>
+
+            <div class="timer-session-info">
+              <div class="timer-session-item">
+                <span class="timer-session-label">今日のポモドーロ</span>
+                <span class="timer-session-val" id="today-pomodoros">${todayPomodoros} 🍅</span>
+              </div>
+              <div class="timer-session-item">
+                <span class="timer-session-label">このセッション</span>
+                <span class="timer-session-val" id="session-count">${sessionsDone} / ${LONG_AFTER}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 説明カード -->
+          <div class="timer-info-card">
+            <h2 class="timer-info-title">ポモドーロ・テクニックとは</h2>
+            <ol class="timer-info-list">
+              <li>タスクを決めて <strong>${WORK_MIN}分間</strong> 集中して取り組む</li>
+              <li>${WORK_MIN}分経ったら <strong>${SHORT_MIN}分間</strong> 短い休憩をとる</li>
+              <li>${LONG_AFTER}セット終えたら <strong>${LONG_MIN}分間</strong> 長めの休憩をとる</li>
+              <li>このサイクルを繰り返す</li>
+            </ol>
+            <div class="timer-tips">
+              <div class="timer-tip"><span class="timer-tip-icon">📵</span>通知をオフにして集中しよう</div>
+              <div class="timer-tip"><span class="timer-tip-icon">📝</span>作業前にやることを書き出そう</div>
+              <div class="timer-tip"><span class="timer-tip-icon">💧</span>休憩中は目を休め水を飲もう</div>
+            </div>
+          </div>
+
+        </div>`;
+
+      bindTimerEvents();
+    }
+
+    // ── イベント ──────────────────────────────────────
+    function bindTimerEvents() {
+      document.getElementById('timer-start-btn').addEventListener('click', toggleTimer);
+      document.getElementById('timer-reset-btn').addEventListener('click', resetTimer);
+
+      document.querySelectorAll('.timer-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (running) return;
+          switchMode(btn.dataset.mode);
+        });
+      });
+    }
+
+    function toggleTimer() {
+      if (running) { pause(); } else { start(); }
+    }
+
+    function start() {
+      running = true;
+      document.getElementById('timer-start-btn').textContent = '⏸ 一時停止';
+      intervalId = setInterval(tick, 1000);
+    }
+
+    function pause() {
+      running = false;
+      clearInterval(intervalId);
+      document.getElementById('timer-start-btn').textContent = '▶ スタート';
+    }
+
+    function resetTimer() {
+      pause();
+      remaining = totalSec;
+      updateRingDOM();
+    }
+
+    function tick() {
+      remaining--;
+      if (remaining <= 0) {
+        remaining = 0;
+        updateRingDOM();
+        clearInterval(intervalId);
+        running = false;
+        onComplete();
+        return;
+      }
+      updateRingDOM();
+    }
+
+    function updateRingDOM() {
+      const pct  = remaining / totalSec;
+      const r    = 90;
+      const circ = 2 * Math.PI * r;
+      const dash = (pct * circ).toFixed(1);
+      const gap  = (circ - dash).toFixed(1);
+      const arc  = document.getElementById('timer-ring-arc');
+      if (arc) arc.setAttribute('stroke-dasharray', `${dash} ${gap}`);
+      const min  = String(Math.floor(remaining / 60)).padStart(2, '0');
+      const sec  = String(remaining % 60).padStart(2, '0');
+      const timeText = document.getElementById('timer-time-text');
+      if (timeText) timeText.textContent = `${min}:${sec}`;
+      // タブタイトルにも表示
+      document.title = `${min}:${sec} — AP攻略サイト`;
+    }
+
+    function switchMode(newMode) {
+      mode = newMode;
+      totalSec = mode === 'work' ? WORK_MIN * 60 :
+                 mode === 'short' ? SHORT_MIN * 60 : LONG_MIN * 60;
+      remaining = totalSec;
+      render();
+    }
+
+    function onComplete() {
+      beep();
+      if (mode === 'work') {
+        sessionsDone++;
+        todayPomodoros++;
+        localStorage.setItem(todayKey, String(todayPomodoros));
+        const el = document.getElementById('today-pomodoros');
+        if (el) el.textContent = todayPomodoros + ' 🍅';
+        const sc = document.getElementById('session-count');
+        if (sc) sc.textContent = `${sessionsDone} / ${LONG_AFTER}`;
+        showToast(`作業完了！🍅 今日 ${todayPomodoros} ポモドーロ達成`, 'success');
+        // 自動で休憩モードに切り替え
+        const nextMode = sessionsDone >= LONG_AFTER ? 'long' : 'short';
+        if (sessionsDone >= LONG_AFTER) sessionsDone = 0;
+        setTimeout(() => switchMode(nextMode), 1200);
+      } else {
+        showToast('休憩終了！作業を再開しましょう', 'info');
+        setTimeout(() => switchMode('work'), 1200);
+      }
+      // タイトルを戻す
+      document.title = '応用情報技術者試験 攻略サイト';
+    }
+
+    // hashchange で離れたらタイマー停止・タイトル戻す
+    function cleanup() {
+      clearInterval(intervalId);
+      document.title = '応用情報技術者試験 攻略サイト';
+      window.removeEventListener('hashchange', cleanup);
+    }
+    window.addEventListener('hashchange', cleanup);
+
+    render();
+  }
+
   // ─── 公開 API ─────────────────────────────────────────
   return {
     renderHome, renderSubjects, renderSubjectDetail,
     renderQuizSetup, renderQuestion, renderResult,
     renderDashboard, renderExamInfo,
     renderGlossary, renderPlan, renderPmExam, renderCheatsheet,
-    renderQuestions, renderFlashcard, renderReport, renderMemos, render404,
+    renderQuestions, renderFlashcard, renderReport, renderMemos, renderTimer, render404,
   };
 })();
