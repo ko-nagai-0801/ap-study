@@ -55,6 +55,23 @@ const Pages = (() => {
     const hasPrev = stats.totalAttempts > 0;
     const dueCount = Store.getDueQuestions(999).length;
 
+    // 弱点タグトップ3（全履歴から）
+    const _tagMap = {};
+    QUESTIONS_DATA.forEach(q => {
+      const p = Store.getProgress(q.id);
+      if (!p || p.attempts === 0) return;
+      (q.tags || []).forEach(tag => {
+        if (!_tagMap[tag]) _tagMap[tag] = { correct: 0, attempts: 0 };
+        _tagMap[tag].correct  += p.correct  || 0;
+        _tagMap[tag].attempts += p.attempts || 0;
+      });
+    });
+    const weakTags = Object.entries(_tagMap)
+      .filter(([, d]) => d.attempts >= 3)
+      .map(([tag, d]) => ({ tag, acc: Math.round(d.correct / d.attempts * 100) }))
+      .sort((a, b) => a.acc - b.acc)
+      .slice(0, 3);
+
     const progressBanner = hasPrev ? `
       <section class="section" style="padding-top:32px; padding-bottom:0;">
         <div class="container">
@@ -146,6 +163,23 @@ const Pages = (() => {
               </div>
               <span class="review-reminder__arrow">→</span>
             </a>
+          </div>
+        </section>` : ''}
+
+        ${hasPrev && weakTags.length > 0 ? `
+        <section style="padding-top:16px;padding-bottom:0;">
+          <div class="container">
+            <div class="weak-tag-banner">
+              <div class="weak-tag-banner__title">📉 苦手タグ重点学習</div>
+              <div class="weak-tag-banner__chips">
+                ${weakTags.map(t => `
+                  <a href="#/quiz?mode=random" class="weak-tag-chip">
+                    <span class="weak-tag-chip__name">${t.tag}</span>
+                    <span class="weak-tag-chip__pct" style="color:${t.acc < 40 ? 'var(--color-error)' : 'var(--color-warning)'};">${t.acc}%</span>
+                  </a>`).join('')}
+              </div>
+              <div class="weak-tag-banner__hint">これらのタグの問題を集中的に解きましょう</div>
+            </div>
           </div>
         </section>` : ''}
 
@@ -1095,6 +1129,40 @@ const Pages = (() => {
         </div>
       </div>` : '';
 
+    // タグ別正誤集計（今回のセッション）
+    const tagMap = {};
+    q.answers.forEach(a => {
+      const question = QUESTIONS_DATA.find(qst => qst.id === a.questionId);
+      if (!question) return;
+      (question.tags || []).forEach(tag => {
+        if (!tagMap[tag]) tagMap[tag] = { correct: 0, total: 0 };
+        tagMap[tag].total++;
+        if (a.correct) tagMap[tag].correct++;
+      });
+    });
+    const tagRows = Object.entries(tagMap)
+      .map(([tag, d]) => ({ tag, ...d, acc: Math.round(d.correct / d.total * 100) }))
+      .sort((a, b) => a.acc - b.acc);
+    const tagAnalysisHtml = tagRows.length > 0 ? `
+      <div class="card" style="margin-bottom:24px;">
+        <h2 class="card-title" style="margin-bottom:14px;">🏷 タグ別正答率（今回）</h2>
+        <div class="result-tag-grid">
+          ${tagRows.map(r => {
+            const color = r.acc >= 80 ? 'var(--color-success)' : r.acc >= 60 ? 'var(--color-warning)' : 'var(--color-error)';
+            return `<div class="result-tag-chip" style="border-color:${color};">
+              <span class="result-tag-name">${r.tag}</span>
+              <span class="result-tag-pct" style="color:${color};">${r.acc}%</span>
+              <div class="result-tag-bar-bg"><div class="result-tag-bar-fill" style="width:${r.acc}%;background:${color};"></div></div>
+            </div>`;
+          }).join('')}
+        </div>
+        ${tagRows.filter(r => r.acc < 60).length > 0 ? `
+          <div class="result-weak-tags">
+            <span class="result-weak-tags__label">苦手タグ：</span>
+            ${tagRows.filter(r => r.acc < 60).map(r => `<span class="tag tag--weak">${r.tag}</span>`).join('')}
+          </div>` : ''}
+      </div>` : '';
+
     // 間違えた問題一覧
     const wrongAnswers = q.answers
       .filter(a => !a.correct)
@@ -1155,6 +1223,9 @@ const Pages = (() => {
               <h2 class="card-title" style="margin-bottom:20px;">🎯 難易度別正答率</h2>
               ${diffBreakdown}
             </div>` : ''}
+
+          <!-- タグ分析 -->
+          ${tagAnalysisHtml}
 
           <!-- 時間分析 -->
           ${timeAnalysisHtml}
@@ -2321,6 +2392,67 @@ const Pages = (() => {
             </div>
           </div>
 
+          <!-- 午後記述サンプル問題 -->
+          <h2 style="font-size:1.2rem;font-weight:700;margin:32px 0 16px;">📄 記述式サンプル問題（解答例付き）</h2>
+          <p style="font-size:.875rem;color:var(--color-text-muted);margin-bottom:16px;">※ 実際の試験の出題形式をイメージしたサンプル問題です。「解答例を見る」をクリックして解答と採点ポイントを確認しましょう。</p>
+          ${[
+            {
+              genre: '情報セキュリティ（問1 必須）', icon: '🔒',
+              situation: '株式会社 A 社の情報システム部では、社員の PC が標的型メール攻撃によりマルウェアに感染した。感染した PC は社内ネットワークに接続されており、攻撃者はこれを踏み台として内部サーバへのアクセスを試みていることが SIEM ログから判明した。',
+              q1: '（1）SIEM を使用してこの攻撃を検知できた理由を、SIEM の機能に言及して30字以内で述べよ。',
+              a1: '複数システムのログを相関分析し、通常と異なる内部アクセスを検知できたから。',
+              p1: '「相関分析」「複数ログ」のキーワードが含まれること。単に「ログを収集するから」では不十分。',
+              q2: '（2）感染PCを発見後、まず実施すべき初動対応を40字以内で述べよ。',
+              a2: '感染PCをネットワークから即時切断し、他端末への被害拡大を防ぐとともに証拠を保全する。',
+              p2: '「ネットワーク切断（隔離）」「被害拡大防止」「証拠保全」の要素を含めること。',
+            },
+            {
+              genre: 'データベース（問3 選択）', icon: '🗃️',
+              situation: '次の E-R 図に基づいてデータベースを設計した。「受注」テーブル（受注ID, 顧客ID, 受注日）と「受注明細」テーブル（受注ID, 商品ID, 数量, 単価）がある。顧客テーブルには（顧客ID, 顧客名, 地域コード）が存在する。',
+              q1: '（1）受注明細テーブルの主キーを答えよ。',
+              a1: '受注ID と 商品ID の複合主キー',
+              p1: '受注IDのみは不正解（同一受注に複数商品があるため）。複合キーであることを明示する。',
+              q2: '（2）受注日が 2024年10月1日以降の受注について、顧客名ごとの受注件数を多い順に表示するSQL文を書け。',
+              a2: 'SELECT c.顧客名, COUNT(o.受注ID) AS 受注件数\nFROM 受注 o JOIN 顧客 c ON o.顧客ID = c.顧客ID\nWHERE o.受注日 >= \'2024-10-01\'\nGROUP BY c.顧客名\nORDER BY 受注件数 DESC;',
+              p2: 'JOIN・WHERE・GROUP BY・ORDER BY DESC の4要素を全て含むこと。エイリアスは任意。',
+            },
+            {
+              genre: 'プロジェクトマネジメント（問7 選択）', icon: '📊',
+              situation: 'プロジェクト X のある時点（報告日）のEVM指標が以下の通りであった。PV（計画値）= 800万円、EV（出来高）= 600万円、AC（実際コスト）= 750万円。BAC（完成時予算）= 2000万円。',
+              q1: '（1）このプロジェクトの CPI と SPI を小数点第2位まで求めよ。',
+              a1: 'CPI = EV/AC = 600/750 = 0.80　　SPI = EV/PV = 600/800 = 0.75',
+              p1: '計算式と値を両方示すこと。CPI=0.80（コスト超過）・SPI=0.75（スケジュール遅延）の判断まで書けると加点。',
+              q2: '（2）EAC（完成時総コスト予測）を BAC÷CPI の式で求め、初期予算との差異を述べよ。',
+              a2: 'EAC = BAC ÷ CPI = 2000 ÷ 0.80 = 2500万円。初期予算より 500万円のコスト超過が見込まれる。',
+              p2: '計算過程・結果・差異の考察を含めること。「コスト超過」という結論を明記する。',
+            },
+          ].map((s, i) => `
+            <div class="card pm-sample-card" style="margin-bottom:16px;">
+              <div class="pm-sample-header">
+                <span class="pm-sample-genre-badge">${s.icon} ${s.genre}</span>
+              </div>
+              <div class="pm-sample-situation">
+                <strong>【状況設定】</strong>${s.situation}
+              </div>
+              <div class="pm-sample-q">${s.q1}</div>
+              <details class="pm-sample-details">
+                <summary>解答例を見る</summary>
+                <div class="pm-sample-answer">
+                  <div class="pm-sample-answer-text">${s.a1.replace(/\n/g, '<br>')}</div>
+                  <div class="pm-sample-scoring"><strong>採点ポイント：</strong>${s.p1}</div>
+                </div>
+              </details>
+              <div class="pm-sample-q" style="margin-top:14px;">${s.q2}</div>
+              <details class="pm-sample-details">
+                <summary>解答例を見る</summary>
+                <div class="pm-sample-answer">
+                  <div class="pm-sample-answer-text">${s.a2.replace(/\n/g, '<br>')}</div>
+                  <div class="pm-sample-scoring"><strong>採点ポイント：</strong>${s.p2}</div>
+                </div>
+              </details>
+            </div>
+          `).join('')}
+
           <div style="text-align:center;">
             <a href="#/quiz?mode=random" class="btn btn-primary btn-lg">午前問題の演習へ →</a>
             <a href="#/subjects" class="btn btn-secondary btn-lg" style="margin-left:12px;">分野別テキストを読む</a>
@@ -2328,6 +2460,8 @@ const Pages = (() => {
         </div>
       </div>
     `);
+
+    // サンプル問題のdetails展開イベントは不要（ネイティブdetails/summary使用）
   }
 
   // ─── 試験直前まとめシート ──────────────────────────── //
