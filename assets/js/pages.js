@@ -2132,6 +2132,45 @@ const Pages = (() => {
 
     const fmtMin = m => m >= 60 ? `${m/60|0}時間${m%60?m%60+'分':''}` : `${m}分`;
 
+    // 今日のタスク計算
+    const unansweredCount = QUESTIONS_DATA.filter(q => Store.getProgress(q.id).attempts === 0).length;
+    const srDueList = Store.getDueQuestions(50);
+    const weakQsList = Store.getWeakQuestions(20);
+
+    const todayTasksHtml = `
+      <div class="card today-tasks-card" style="margin-bottom:24px;">
+        <h2 class="card-title" style="margin-bottom:16px;">📌 今日のタスク</h2>
+        <div class="today-tasks-grid">
+          <div class="today-task-item today-task-item--new">
+            <div class="today-task-icon">🆕</div>
+            <div class="today-task-body">
+              <div class="today-task-label">未解答問題</div>
+              <div class="today-task-count">${unansweredCount}<span class="today-task-unit">問</span></div>
+              <div class="today-task-desc">まだ一度も解いていない問題</div>
+            </div>
+            <a href="#/quiz?mode=random" class="btn btn-sm btn-primary today-task-btn">演習開始</a>
+          </div>
+          <div class="today-task-item today-task-item--sr">
+            <div class="today-task-icon">🔁</div>
+            <div class="today-task-body">
+              <div class="today-task-label">復習問題（SR）</div>
+              <div class="today-task-count">${srDueList.length}<span class="today-task-unit">問</span></div>
+              <div class="today-task-desc">間隔反復で今日復習すべき問題</div>
+            </div>
+            <a href="#/quiz?mode=review" class="btn btn-sm btn-secondary today-task-btn">復習開始</a>
+          </div>
+          <div class="today-task-item today-task-item--weak">
+            <div class="today-task-icon">⚠️</div>
+            <div class="today-task-body">
+              <div class="today-task-label">弱点問題</div>
+              <div class="today-task-count">${weakQsList.length}<span class="today-task-unit">問</span></div>
+              <div class="today-task-desc">正答率 60%未満の苦手問題</div>
+            </div>
+            <a href="#/quiz?mode=weak" class="btn btn-sm btn-warning today-task-btn">克服開始</a>
+          </div>
+        </div>
+      </div>`;
+
     mount(`
       <div class="page fade-in">
         <div class="container">
@@ -2139,6 +2178,8 @@ const Pages = (() => {
             <h1 class="page-title">📅 学習計画</h1>
             <p class="page-subtitle">試験日までの効率的な学習スケジュール</p>
           </div>
+
+          ${todayTasksHtml}
 
           <!-- カウントダウン -->
           <div class="plan-exam-countdown">
@@ -2552,6 +2593,36 @@ const Pages = (() => {
           { label: 'コンテナ vs VM', formula: 'コンテナ：カーネル共有・高速起動 / VM：完全分離・高セキュリティ', note: 'Dockerはnamespace+cgroups' },
           { label: 'RAID比較', formula: 'RAID0:速度 / RAID1:ミラー / RAID5:分散パリティ1台 / RAID6:2台故障耐', note: '' },
           { label: 'キャッシュ実効アクセス時間', formula: 'h×Tc + (1−h)×Tm', note: 'h:ヒット率、Tc:キャッシュ、Tm:主記憶' },
+        ],
+      },
+      {
+        id: 'legal', title: '法規・ストラテジ頻出', icon: '⚖️', color: '#5C7CFA',
+        items: [
+          { label: '著作権の保護期間', formula: '著作者の死後 70 年（法人著作は公表後 70 年）', note: '2018年改正で50年→70年に延長' },
+          { label: '個人情報保護法の定義', formula: '生存する個人を識別できる情報（氏名・生年月日・顔画像等）', note: '要配慮個人情報は取得に本人同意が必要' },
+          { label: '不正アクセス禁止法', formula: 'アクセス制御された他人のコンピュータに無権限でアクセスすることを禁止', note: '準備行為（フィッシング）も規制対象' },
+          { label: 'プロバイダ責任制限法', formula: '権利侵害情報の発信者情報の開示請求権を規定', note: '2022年改正で非訟手続が新設' },
+          { label: 'BSC 4つの視点', formula: '財務・顧客・内部プロセス・学習と成長', note: 'Kaplan & Norton 提唱' },
+          { label: 'PPM（プロダクト・ポートフォリオ・マネジメント）', formula: '花形（高成長・高シェア）/ 金のなる木（低成長・高シェア）/ 問題児（高成長・低シェア）/ 負け犬（低成長・低シェア）', note: 'BCG マトリクス' },
+          { label: 'SWOT→クロス分析', formula: 'SO（強み×機会）/ ST（強み×脅威）/ WO（弱み×機会）/ WT（弱み×脅威）', note: '積極戦略・差別化・改善・撤退' },
+          { label: 'ERP（統合基幹業務システム）', formula: '財務・人事・生産・販売・在庫を一元管理', note: 'SAP・Oracle が代表製品' },
+          { label: 'TCO（総所有コスト）', formula: '初期導入コスト＋運用・保守コスト＋廃棄コスト', note: 'クラウド移行効果の試算に使用' },
+          { label: 'グリーン IT', formula: 'IT 機器の省エネ化・CO₂削減・電子廃棄物管理', note: 'PUE（電力使用効率）= 施設全消費電力 ÷ IT機器消費電力' },
+        ],
+      },
+      {
+        id: 'algmath', title: 'アルゴリズム・数学頻出', icon: '📐', color: '#7950F2',
+        items: [
+          { label: 'ソート計算量比較', formula: 'バブル：O(n²) / 選択：O(n²) / 挿入：O(n²) / マージ：O(n log n) / クイック平均：O(n log n) / ヒープ：O(n log n)', note: '安定ソート：バブル・挿入・マージ' },
+          { label: '探索計算量比較', formula: '線形：O(n) / 二分：O(log n) / ハッシュ：O(1)平均', note: '二分探索は整列済みが前提' },
+          { label: '木の深さとノード数', formula: '2分木：深さ d で最大 2^(d+1)−1 ノード / 深さ d の葉は最大 2^d 個', note: '完全 2 分木' },
+          { label: 'グラフの辺数', formula: 'n 頂点の完全グラフ：n(n−1)/2 本 / 木：n−1 本', note: 'DAG（有向非巡回グラフ）はトポロジカルソートに使用' },
+          { label: 'ダイクストラ法', formula: '非負重み付きグラフの単一始点最短経路 O(E log V)（ヒープ使用）', note: '負辺あり → ベルマンフォード O(VE)' },
+          { label: 'クラスカル / プリム法（MST）', formula: 'クラスカル：辺を昇順ソート＋Union-Find。O(E log E)\nプリム：頂点拡張。O(E log V)', note: '最小全域木（MST）の 2 大アルゴリズム' },
+          { label: '2 進数変換', formula: '10進→2進：繰り返し2除算で余りを逆読み\n2進→16進：4ビット区切りで変換', note: '16進 A=10, B=11, C=12, D=13, E=14, F=15' },
+          { label: '2 の補数', formula: 'ビット反転＋1。8ビット範囲：−128〜127', note: '加算回路で減算を実現するための表現法' },
+          { label: 'IEEE 754 単精度', formula: '符号 1bit ＋ 指数 8bit（バイアス127）＋ 仮数 23bit', note: '有効桁 約7桁 / 倍精度は 64bit・有効桁約15桁' },
+          { label: 'ハミング符号', formula: '冗長ビット r：2^r ≥ n+r+1 を満たす最小 r を選択', note: '1ビット誤り訂正・2ビット誤り検出' },
         ],
       },
     ];

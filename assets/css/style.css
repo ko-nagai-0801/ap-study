@@ -1900,6 +1900,67 @@ select.form-control { appearance: none; padding-right: 36px;
 }
 .timer-tip-icon { font-size: 1.2rem; }
 
+/* ─── 今日のタスクウィジェット ─── */
+.today-tasks-card { background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-surface-2) 100%); }
+.today-tasks-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+@media (max-width: 767px) {
+  .today-tasks-grid { grid-template-columns: 1fr; }
+}
+.today-task-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 16px;
+  border-radius: var(--radius-lg);
+  text-align: center;
+  border: 2px solid transparent;
+  transition: transform .2s, box-shadow .2s;
+}
+.today-task-item:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.today-task-item--new {
+  background: rgba(67,97,238,.08);
+  border-color: rgba(67,97,238,.25);
+}
+.today-task-item--sr {
+  background: rgba(12,166,120,.08);
+  border-color: rgba(12,166,120,.25);
+}
+.today-task-item--weak {
+  background: rgba(230,119,0,.08);
+  border-color: rgba(230,119,0,.25);
+}
+.today-task-icon { font-size: 2rem; }
+.today-task-body { flex: 1; }
+.today-task-label {
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--color-text-sub);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: 4px;
+}
+.today-task-count {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--color-text);
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.today-task-unit { font-size: 1rem; font-weight: 600; margin-left: 2px; }
+.today-task-desc { font-size: .78rem; color: var(--color-text-muted); }
+.today-task-btn { margin-top: 4px; align-self: stretch; }
+.btn-warning {
+  background: var(--color-warning);
+  color: #fff;
+  border: 1px solid transparent;
+}
+.btn-warning:hover { filter: brightness(0.92); }
+
 /* 印刷スタイル */
 @media print {
   .header, .footer, .no-print, #search-overlay, .toast-container { display: none !important; }
