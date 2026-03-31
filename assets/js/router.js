@@ -20,6 +20,7 @@ const Router = (() => {
     '/report':      () => Pages.renderReport(),
     '/memos':       () => Pages.renderMemos(),
     '/timer':       () => Pages.renderTimer(),
+    '/settings':    () => Pages.renderSettings(),
   };
 
   // 動的ルート: /subjects/:id

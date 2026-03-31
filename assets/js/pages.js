@@ -3538,12 +3538,205 @@ const Pages = (() => {
     render();
   }
 
+  // ─── 設定ページ ─────────────────────────────────────── //
+  function renderSettings() {
+    const theme     = Store.getSetting('theme') || 'light';
+    const dailyGoal = Store.getSetting('dailyGoal') || 20;
+    const examDate  = Store.getSetting('examDate') || '';
+    const stats     = Store.getOverallStats();
+
+    mount(`
+      <div class="page fade-in">
+        <div class="container" style="max-width:720px;">
+          <div class="page-header">
+            <h1 class="page-title">⚙️ 設定</h1>
+            <p class="page-subtitle">学習環境をカスタマイズしましょう</p>
+          </div>
+
+          <!-- 学習目標設定 -->
+          <div class="settings-card">
+            <div class="settings-card__header">
+              <span class="settings-card__icon">🎯</span>
+              <h2 class="settings-card__title">学習目標</h2>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row__label">
+                <div class="settings-row__name">1日の目標問題数</div>
+                <div class="settings-row__desc">毎日の学習目標を設定します</div>
+              </div>
+              <div class="settings-row__control" style="display:flex;gap:8px;align-items:center;">
+                <input type="number" id="s-daily-goal" class="settings-input" value="${dailyGoal}" min="1" max="200" style="width:80px;">
+                <span style="font-size:.85rem;color:var(--color-text-muted);">問</span>
+                <button class="btn btn-primary btn-sm" id="s-daily-save">保存</button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row__label">
+                <div class="settings-row__name">受験予定日</div>
+                <div class="settings-row__desc">ダッシュボードのカウントダウンに反映されます</div>
+              </div>
+              <div class="settings-row__control" style="display:flex;gap:8px;align-items:center;">
+                <input type="date" id="s-exam-date" class="settings-input" value="${examDate}" style="width:160px;">
+                <button class="btn btn-primary btn-sm" id="s-exam-save">保存</button>
+                ${examDate ? `<button class="btn btn-outline btn-sm" id="s-exam-clear">クリア</button>` : ''}
+              </div>
+            </div>
+          </div>
+
+          <!-- 表示設定 -->
+          <div class="settings-card">
+            <div class="settings-card__header">
+              <span class="settings-card__icon">🎨</span>
+              <h2 class="settings-card__title">表示設定</h2>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row__label">
+                <div class="settings-row__name">テーマ</div>
+                <div class="settings-row__desc">ライト / ダークモードを選択します</div>
+              </div>
+              <div class="settings-row__control">
+                <div class="settings-theme-btns">
+                  <button class="settings-theme-btn ${theme === 'light' ? 'active' : ''}" data-theme="light">☀️ ライト</button>
+                  <button class="settings-theme-btn ${theme === 'dark' ? 'active' : ''}" data-theme="dark">🌙 ダーク</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 学習データ管理 -->
+          <div class="settings-card">
+            <div class="settings-card__header">
+              <span class="settings-card__icon">💾</span>
+              <h2 class="settings-card__title">データ管理</h2>
+            </div>
+            <div class="settings-data-stats">
+              <div class="settings-data-stat"><span class="settings-data-stat__val">${stats.totalAttempts}</span><span class="settings-data-stat__lbl">回答数</span></div>
+              <div class="settings-data-stat"><span class="settings-data-stat__val">${stats.sessionsCount}</span><span class="settings-data-stat__lbl">セッション</span></div>
+              <div class="settings-data-stat"><span class="settings-data-stat__val">${stats.streak}日</span><span class="settings-data-stat__lbl">連続記録</span></div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row__label">
+                <div class="settings-row__name">データをエクスポート</div>
+                <div class="settings-row__desc">学習履歴・進捗を JSON ファイルとして保存</div>
+              </div>
+              <div class="settings-row__control">
+                <button class="btn btn-secondary btn-sm" id="s-export">⬇️ エクスポート</button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row__label">
+                <div class="settings-row__name">データをインポート</div>
+                <div class="settings-row__desc">エクスポートした JSON ファイルから復元</div>
+              </div>
+              <div class="settings-row__control">
+                <label class="btn btn-secondary btn-sm" style="cursor:pointer;">
+                  ⬆️ インポート
+                  <input type="file" id="s-import-file" accept=".json" style="display:none;">
+                </label>
+              </div>
+            </div>
+            <div class="settings-row settings-row--danger">
+              <div class="settings-row__label">
+                <div class="settings-row__name" style="color:var(--color-error);">学習データをリセット</div>
+                <div class="settings-row__desc">回答履歴・進捗・バッジ・メモをすべて削除（取り消し不可）</div>
+              </div>
+              <div class="settings-row__control">
+                <button class="btn btn-sm" id="s-reset" style="color:var(--color-error);border:1px solid var(--color-error);background:transparent;">🗑 リセット</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- サイト情報 -->
+          <div class="settings-card">
+            <div class="settings-card__header">
+              <span class="settings-card__icon">ℹ️</span>
+              <h2 class="settings-card__title">サイト情報</h2>
+            </div>
+            <div class="settings-info-list">
+              <div class="settings-info-item"><span>問題数</span><strong>${QUESTIONS_DATA.length} 問</strong></div>
+              <div class="settings-info-item"><span>用語集</span><strong>${GLOSSARY_DATA.length} 語</strong></div>
+              <div class="settings-info-item"><span>バージョン</span><strong>Phase 18</strong></div>
+              <div class="settings-info-item"><span>データ保存</span><strong>ブラウザ内 localStorage</strong></div>
+            </div>
+            <p style="font-size:.78rem;color:var(--color-text-muted);margin-top:16px;">
+              ※ 本サイトの問題は学習目的で作成したサンプル問題です。正確な過去問は
+              <a href="https://www.ipa.go.jp/shiken/" target="_blank" rel="noopener noreferrer">IPA 公式サイト</a> でご確認ください。
+            </p>
+          </div>
+
+        </div>
+      </div>
+    `);
+
+    // 1日目標保存
+    document.getElementById('s-daily-save').addEventListener('click', () => {
+      const v = parseInt(document.getElementById('s-daily-goal').value, 10);
+      if (v > 0) { Store.setSetting('dailyGoal', v); showToast('1日目標を更新しました', 'success'); }
+    });
+
+    // 試験日保存
+    document.getElementById('s-exam-save').addEventListener('click', () => {
+      const v = document.getElementById('s-exam-date').value;
+      if (v) { Store.setSetting('examDate', v); showToast('試験日を設定しました', 'success'); renderSettings(); }
+    });
+    const examClearBtn = document.getElementById('s-exam-clear');
+    if (examClearBtn) {
+      examClearBtn.addEventListener('click', () => {
+        Store.setSetting('examDate', null);
+        showToast('試験日をクリアしました');
+        renderSettings();
+      });
+    }
+
+    // テーマ切替
+    document.querySelectorAll('.settings-theme-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const t = btn.dataset.theme;
+        document.documentElement.setAttribute('data-theme', t);
+        Store.setSetting('theme', t);
+        const icon = document.getElementById('theme-icon');
+        if (icon) icon.textContent = t === 'dark' ? '☀️' : '🌙';
+        document.querySelectorAll('.settings-theme-btn').forEach(b => b.classList.toggle('active', b.dataset.theme === t));
+        showToast(`${t === 'dark' ? 'ダーク' : 'ライト'}モードに切り替えました`, 'success');
+      });
+    });
+
+    // エクスポート
+    document.getElementById('s-export').addEventListener('click', () => {
+      Store.exportData();
+      showToast('データをエクスポートしました', 'success');
+    });
+
+    // インポート
+    document.getElementById('s-import-file').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const ok = Store.importData(ev.target.result);
+        if (ok) { showToast('データをインポートしました', 'success'); renderSettings(); }
+        else showToast('インポートに失敗しました（ファイル形式が無効）', 'error');
+        e.target.value = '';
+      };
+      reader.readAsText(file);
+    });
+
+    // リセット
+    document.getElementById('s-reset').addEventListener('click', () => {
+      if (confirm('学習データをすべてリセットしますか？この操作は取り消せません。')) {
+        Store.resetAll();
+        showToast('学習データをリセットしました', 'success');
+        renderSettings();
+      }
+    });
+  }
+
   // ─── 公開 API ─────────────────────────────────────────
   return {
     renderHome, renderSubjects, renderSubjectDetail,
     renderQuizSetup, renderQuestion, renderResult,
     renderDashboard, renderExamInfo,
     renderGlossary, renderPlan, renderPmExam, renderCheatsheet,
-    renderQuestions, renderFlashcard, renderReport, renderMemos, renderTimer, render404,
+    renderQuestions, renderFlashcard, renderReport, renderMemos, renderTimer, renderSettings, render404,
   };
 })();
